@@ -1,0 +1,7 @@
+{
+  "build": "iCASE3_CN_3G8919360FN_S2995",
+  "hmi_jar": "MIBHMI-STD-HCN1.1.134-bin.jar",
+  "hmi_jar_sha256": "c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17",
+  "vehicle_validated": false,
+  "run_hmi_sha256": "d9c466c9824625ac9620064a52b27a36726d1f7a401a67b6e94f29ab88a8e111"
+}
