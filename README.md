@@ -4,7 +4,7 @@
 
 ## 概述 / Overview
 
-ICAS3 SW 2995 原车日夜主题研究与控制工具。按 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 的双语、源码与文档发布方式整理。
+ICAS3 SW 2995 原车日夜主题研究与控制工具。
 
 本仓库仅含自编源码、配置示例和固件摘要，不含固件、厂商 JAR、修改后的厂商二进制、凭据、车辆数据或本机配置。
 
