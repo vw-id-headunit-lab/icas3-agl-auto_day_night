@@ -1,4 +1,4 @@
-# Publish only the reviewed source trees and project metadata.
+# Only reviewed source and metadata are published.
 /*
 !/.gitignore
 !/.github/
@@ -6,13 +6,7 @@
 !/LICENSE
 !/THIRD_PARTY_NOTICES.txt
 !/firmware.json
-!/go.mod
-!/cmd/
-!/internal/
-!/hmi/
 !/native-auto-menu/
-!/examples/
-!/scripts/
 __pycache__/
 *.py[cod]
 *.class
@@ -25,4 +19,3 @@ __pycache__/
 *.tar.gz
 *.token
 *.local.json
-state.json*

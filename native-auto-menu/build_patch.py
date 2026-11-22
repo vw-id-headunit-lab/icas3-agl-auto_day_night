@@ -12,8 +12,6 @@ VISIBILITY = {
     PREFIX+'Sc__5.class': '14f0d5e6984303726c5710f7bb3d4abecf7f590b4948e6ffcfacd62f6b7d4349',
     PREFIX+'Scm__9.class': 'b21c88d6e664a027e2a2581f47aa4360a401ea564c2873324f6e0825fc876722',
 }
-GENERAL = 'de/vw/mib/asl/internal/system/AslTargetSystemGeneral.class'
-GENERAL_SHA256 = '5f447a4e80e3451855c57b11ecabedbd195f02a5032252dd575d4ecef7e6f674'
 
 
 def sha(data):
@@ -99,68 +97,12 @@ class ClassFile:
                                 'class_file_offset': pos, 'before': hex(before), 'after': hex(after),
                                 'following_call': list(ref)}
 
-    def preserve_integer_local(self, method, descriptor, frame_offset, slot):
-        start, _ = self.code_attributes[(method, descriptor)]['StackMapTable']
-        count, pos, current = self.u2(start), start+2, -1
-
-        def verification_type(at):
-            tag = self.data[at]
-            return at+3 if tag in (7,8) else at+1
-
-        for _ in range(count):
-            frame = self.data[pos]; pos += 1
-            locals_positions = []
-            if frame <= 63:
-                delta = frame
-            elif frame <= 127:
-                delta = frame-64; pos = verification_type(pos)
-            else:
-                delta = self.u2(pos); pos += 2
-                if frame == 247:
-                    pos = verification_type(pos)
-                elif frame in (248,249,250,251):
-                    pass
-                elif frame in (252,253,254):
-                    for _ in range(frame-251): pos = verification_type(pos)
-                elif frame == 255:
-                    n = self.u2(pos); pos += 2
-                    for _ in range(n):
-                        locals_positions.append(pos); pos = verification_type(pos)
-                    n = self.u2(pos); pos += 2
-                    for _ in range(n): pos = verification_type(pos)
-                else:
-                    raise ValueError('unsupported stack map frame')
-            current += delta+1
-            if current == frame_offset:
-                if frame != 255 or len(locals_positions) != 3 or slot != 1:
-                    raise ValueError('unexpected local layout')
-                where = locals_positions[slot]
-                if self.data[where] != 0 or self.data[locals_positions[2]] != 1:
-                    raise ValueError('unexpected verification types')
-                new = bytearray(self.data); new[where] = 1
-                return bytes(new), {'frame_code_offset':current, 'local_slot':slot,
-                                    'class_file_offset':where,'before':'Top','after':'Integer'}
-        raise ValueError('required stack map frame not found')
-
 
 def patch_visibility(data, expected):
     if sha(data) != expected: raise ValueError('unrecognized AUTO widget class')
     return ClassFile(data).replace_before_call(
         'initNodeWidgets', '(Lde/vw/mib/view/internal/tree/CloneData;)V', 369, 0x03, 0x04,
         'de/vw/mib/introspection/WidgetParamsIterator', 'setZ')
-
-
-def patch_selection(data):
-    if sha(data) != GENERAL_SHA256: raise ValueError('unrecognized system class')
-    new, detail = ClassFile(data).replace_before_call(
-        'Oq', '(I)V', 155, 0x1c, 0x1b,
-        'de/vw/mib/asl/internal/system/clientapi/SystemBaseAPIServiceImpl', 'updateDayNightMode')
-    # The original compiler discards parameter 1 from its verification frame after
-    # the last original use. Keeping that parameter live requires this metadata fix.
-    new, stack_map = ClassFile(new).preserve_integer_local('Oq','(I)V',144,1)
-    detail['stack_map_fix'] = stack_map
-    detail['expected_changed_bytes'] = 2
-    return new, detail
 
 
 def rewrite_jar(source, output, expected_hash, mutators):
@@ -197,21 +139,15 @@ def rewrite_jar(source, output, expected_hash, mutators):
     return {'source_sha256':expected_hash,'candidate_sha256':sha(output.read_bytes()),'changes':changes}
 
 
-def build(view_jar, output, main_jar=None, selection_fix=False):
+def build(view_jar, output):
     output = Path(output)
     if output.exists(): raise ValueError('use a new output directory')
     if sha(Path(view_jar).read_bytes()) != VIEW_JAR_SHA256: raise ValueError('unrecognized viewhandler.jar')
-    pin = json.loads((Path(__file__).resolve().parents[1]/'firmware.json').read_text())
-    if selection_fix and (main_jar is None or sha(Path(main_jar).read_bytes()) != pin['hmi_jar_sha256']):
-        raise ValueError('selection fix requires the inspected original HMI main jar')
     output.mkdir(parents=True)
     report = {'vehicle_validated':False,'installed':False,'scope':'native control-center AUTO menu',
               'visibility_reason':'AUTO root ListItem visible=false in both layouts; day and night are true'}
     report['viewhandler'] = rewrite_jar(view_jar, output/'viewhandler.candidate.jar', VIEW_JAR_SHA256,
         {n: (lambda data, expected=h: patch_visibility(data,expected)) for n,h in VISIBILITY.items()})
-    if selection_fix:
-        report['selection_fix'] = rewrite_jar(main_jar,output/'MIBHMI-STD.candidate.jar',pin['hmi_jar_sha256'],{GENERAL:patch_selection})
-        report['selection_fix']['reason'] = 'Publish requested 0/1/2 as Mode; keep effective DayNightValue and HAS state unchanged.'
     (output/'patch-report.json').write_text(json.dumps(report,indent=2)+'\n')
     return report
 
@@ -220,7 +156,5 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--view-jar', required=True)
     p.add_argument('--output', required=True)
-    p.add_argument('--main-jar')
-    p.add_argument('--include-selection-fix', action='store_true')
     a = p.parse_args()
-    print(json.dumps(build(a.view_jar,a.output,a.main_jar,a.include_selection_fix),indent=2))
+    print(json.dumps(build(a.view_jar,a.output),indent=2))
