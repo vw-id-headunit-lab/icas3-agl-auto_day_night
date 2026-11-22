@@ -4,7 +4,7 @@
 
 ## 概述 / Overview
 
-ICAS3 SW 2995 原车日夜主题研究与控制工具。
+ICAS3 SW 2995 原车日夜主题研究与控制工具。基于 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 项目提供的 AGL root 方法，进一步开发原厂 AUTO 菜单恢复及日夜主题自动切换功能。
 
 本仓库仅含自编源码、配置示例和固件摘要，不含固件、厂商 JAR、修改后的厂商二进制、凭据、车辆数据或本机配置。
 
@@ -102,6 +102,8 @@ Go 测试：`go test -race ./...`。完整桥接构建需自行提供 Go、JDK 1
 ## English
 
 Experimental ICAS3 S2995 native day/night menu restoration and AGL policy controller. Source-only publication; no original or modified vendor binaries, firmware, credentials or machine-specific configuration.
+
+Building on the AGL root method provided by [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root), this project develops native AUTO menu restoration and automatic day/night theme switching.
 
 Native AUTO menu visibility, touch selection, saved mode 2, retained menu selection, simulated vehicle-signal day/night switching and manual modes were verified in a local QEMU guest running the original JVM and HMI. Real-vehicle behavior, production preload caches and cold-boot persistence remain unverified. Fixed-time and offline solar policies passed host tests and a simulated Java backend integration, but were not deployed into that VM session.
 
