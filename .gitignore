@@ -7,6 +7,9 @@
 !/THIRD_PARTY_NOTICES.txt
 !/firmware.json
 !/native-auto-menu/
+!/menu/
+!/safe-update/
+!/docs/
 __pycache__/
 *.py[cod]
 *.class

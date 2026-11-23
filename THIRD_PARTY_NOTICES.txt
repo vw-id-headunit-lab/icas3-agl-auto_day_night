@@ -1,8 +1,15 @@
 ICAS3 AGL Day/Night
 
-The current source release uses the Python standard library. It includes no Go
-runtime, timezone database, solar calculation library, or Java bridge.
+Authored code uses the Go standard library and JDK facilities. The offline
+builder uses the JDK 17 internal ASM API through explicit --add-exports flags.
+The small Java menu adapter links to vendor interfaces provided locally by the
+user. No vendor interface implementation or extracted classes are distributed.
 
-Original Volkswagen/LG firmware files are external local inputs only and are not
-distributed. The MIT license applies to authored code, not to vendor binaries or
-resources. Generated modified vendor files must remain local.
+Go runs as an offline builder and, optionally, a one-shot offline deployment
+tool. It is not a background theme controller. There is no solar/time scheduler,
+network weather service, external bridge JAR, or additional startup service.
+
+Volkswagen/LG firmware, original or modified JARs, shared caches, vehicle data,
+and credentials are external local inputs only and are not distributed.
+The MIT license applies to authored code, not to vendor binaries or resources.
+Generated modified vendor files must remain local.

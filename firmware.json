@@ -1,14 +1,22 @@
 {
   "build": "iCASE3_CN_3G8919360FN_S2995",
   "hmi_version": "HCN1.1.134",
-  "scope": "native AUTO menu visibility only; factory headlight-linked theme logic",
+  "scope": "native headlight-linked AUTO; saved selection display; three visible rows; explicit-click native request correction",
   "viewhandler_original_sha256": "9bd5764fabe2cf79e5193f2dd39c38954f6170a8f016c229c133e2b8165a1ce1",
-  "viewhandler_candidate_sha256": "b2b29caa094c181749e7b25f02a66fa98522e195276b1338b15695df1f7f8019",
   "validation": {
-    "date": "2026-11-22",
+    "date": "2026-11-23",
     "vehicle_auto_visible_after_full_reboot": true,
     "user_confirmed_theme_follows_headlight_changes_after_auto_selection": true,
     "auto_persistence_across_next_reboot": "not_verified",
-    "weather_and_tunnel_scenarios": "not_individually_verified"
-  }
+    "weather_and_tunnel_scenarios": "not_individually_verified",
+    "user_confirmed_current_candidate_after_manual_full_reboot": true,
+    "user_confirmed_current_vehicle_functional_test_passed": true,
+    "auto_selection_display": "user_confirmed",
+    "auto_to_manual_same_effective_theme": "user_confirmed_overall_vehicle_test_passed; no exhaustive timing test claimed",
+    "three_visible_rows": "user_confirmed"
+  },
+  "legacy_visibility_only_candidate_sha256": "b2b29caa094c181749e7b25f02a66fa98522e195276b1338b15695df1f7f8019",
+  "vehicle_tested_candidate_sha256": "283ed23a372531d1d2274d459e14b096474dbb717f4a618791bb38148c396460",
+  "hmi_original_sha256": "c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17",
+  "safe_update_supported_before_sha256": "9113535ba604511c41229bf00201ab4840126966f2fa8f09668f25a564d42c85"
 }

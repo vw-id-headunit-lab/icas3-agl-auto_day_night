@@ -1,83 +1,103 @@
-# ICAS3 AGL Day/Night
+# ICAS3 AGL Auto Day Night
 
 [简体中文](#简体中文) | [English](#english)
 
-ICAS3 S2995 原厂 AUTO 日夜主题菜单恢复工具。基于 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 项目提供的 AGL root 方法，进一步恢复原车自动日夜主题功能。
+中国版 ICAS3 S2995 / HMI HCN1.1.134 原厂日夜主题 AUTO 菜单恢复与状态修复。基于 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 提供的 AGL root 方法进一步开发。
 
 ## 简体中文
 
-### 当前方案：跟随原车大灯状态
+**2026-11-23：用户在手动完整重启后确认本轮实车验证通过。** 当前版本恢复 AUTO 入口、保持 AUTO 选中状态、一次显示日间／夜间／自动三行，并修复 AUTO 与当前实际主题相同时无法切换到手动模式的问题。
 
-在控制中心恢复原本隐藏的“自动”选项。选择后由原车逻辑处理日夜主题，实车已观察到切换大灯时主题随之切换；大灯置于 AUTO 时，由原车灯光系统判断环境并控制大灯。
+> **部署前必须先停止 HMI，并确认没有 JVM 或其它进程占用目标 JAR，才能替换文件。部署完成后由用户手动完整重启车机。回退也遵循同一流程。禁止在线覆盖运行中的 JAR。**
+>
+> **HMI 改动不要未经验证就直接挂开机自启。原车服务带 watchdog 和 `FailureAction=reboot-immediate`：启动持续失败或 watchdog 超时可能触发整机重启；若重启后仍加载同一故障版本，可能形成循环重启。应先准备独立 SSH／控制台恢复入口及回退文件，再进行受控验证。** 本项目不新增自启服务，也不关闭或改写原厂 watchdog／失败处理策略。
 
-本项目只恢复菜单入口，不采集照度或天气数据。阴天、隧道等情况下何时开灯，取决于原车灯光系统。无需额外时间调度、定位、联网或常驻控制程序。
+### 功能与工作方式
 
-固定时刻、日出日落、自定义策略选择器、Go 控制器及 Java 桥接模块已从当前版本移除。当前版本不修改 HMI 主 JAR、启动脚本、组件注册或预加载缓存，也不包含 AUTO 选中状态修复。
+- 控制中心显示“日间、夜间、自动”三项，无需滚动查找 AUTO。
+- 选择 AUTO 后，菜单显示保存的 AUTO 选择；实际主题仍随原车大灯状态变化。
+- 大灯置于 AUTO 时，由原车灯光系统根据环境控制大灯。本项目不自行检测天气、隧道或照度。
+- 保留手动日间／夜间选择；即使 AUTO 的实际主题与所点手动模式相同，也能退出 AUTO。
+- 无固定时间、日出日落、定位、联网或常驻 Go 控制器。
 
-### 验证状态
+**装车只替换 `/vw/hmi/Resources/skin1/viewhandler.jar`。** 不修改 HMI 主 JAR、`runHMI.sh`、`bundles.properties`、启动类路径或原厂预加载缓存；不向 `/vw/hmi/lib` 添加桥接 JAR。
 
-| 项目 | 状态 |
+Go 负责本地构建及一次性离线文件更新；菜单内运行的是最小 Java 适配器。异步读取原厂保存模式并在 UI 线程刷新，绘制函数不等待同步持久化读取。只在明确点击且读回模式与所选值不一致时，最多补发一次原厂切换请求，避免原厂按“实际主题”去重而跳过手动选择。普通显示读取不会切换模式。实现细节见 [实现与验证](docs/IMPLEMENTATION.md)。
+
+### 验证状态与范围
+
+| 项目 | 记录 |
 |---|---|
-| 本机虚拟 HMI 显示 AUTO、触控选择 | 已验证 |
-| 中国版 S2995 实车完整重启后出现 AUTO | 2026-11-22 已验证 |
-| 选择 AUTO 后切换大灯，日夜主题随之变化 | 2026-11-22 用户实车确认 |
-| AUTO 在下次完整重启后仍保持控制状态 | 尚待单独验证 |
-| 阴天、隧道等不同环境 | 尚未逐项实测，交由原车大灯系统控制 |
-| 导航、CarPlay、仪表联动及其它固件版本 | 尚未验证 |
+| AUTO 入口及大灯变化驱动主题 | 2026-11-22 用户实车确认 |
+| 三行菜单、AUTO 选中状态 | 本地虚拟 HMI 验证及实车反馈通过 |
+| 本轮切换修复 | 2026-11-23 停止 HMI 后部署，用户手动完整重启后确认实车验证无问题 |
+| 当前实车候选 SHA-256 | `283ed23a372531d1d2274d459e14b096474dbb717f4a618791bb38148c396460` |
+| AUTO 跨另一次完整重启的持续保持 | 尚未单独确认 |
+| 长时间运行、极端快速点击、天气／隧道、导航／CarPlay／仪表联动 | 未逐项完成验证 |
+| 其它车型、地区、软件版本 | 未验证；不能直接套用 |
 
-已知现象：选 AUTO 后，菜单可能立即把选中标记显示为当前实际的日间／夜间。已验证车辆在这种情况下仍会随大灯切换主题。当前补丁保留此原厂显示行为。
+这里的“通过”为用户本轮实车反馈，不代表所有功能或长期稳定性均已覆盖。已核对输入摘要见 [firmware.json](firmware.json)。
 
-### 支持范围
+### 从源码构建
 
-已分析的中国版 ICAS3 S2995，HMI HCN1.1.134。需要 AGL root 和本车原件备份。工具仅接受已核对的原始 `viewhandler.jar` 摘要，其它版本需要重新研究。
-
-### 文件与生成方式
-
-- `native-auto-menu/build_patch.py`：生成菜单显示候选文件，不安装、不修改输入。
-- `native-auto-menu/test_patch.py`：校验修改范围、原件不变及未知输入拒绝行为。
-- `native-auto-menu/VerifyClasses.java`：可选的主机端 class 加载校验器。
-- `firmware.json`：版本与文件摘要。
-
-自行提供原件，输出到一个不存在的新目录：
+需要 Go 1.23 或更新版本、JDK 17，以及自行提供的对应固件原始 `viewhandler.jar` 与 `MIBHMI-STD-HCN1.1.134-bin.jar`。主 JAR 仅供编译接口使用，**不替换它**。
 
 ```sh
-python3 native-auto-menu/build_patch.py --view-jar /path/to/original/viewhandler.jar --output candidate
+cd menu
+go run ./cmd/daynightlab \
+  --sources . \
+  --jdk /path/to/jdk17 \
+  --view-jar /path/to/original/viewhandler.jar \
+  --hmi-jar /path/to/original/MIBHMI-STD-HCN1.1.134-bin.jar \
+  --output /path/to/new-candidate-directory
 ```
 
-输出 `viewhandler.candidate.jar` 和 `patch-report.json`。两套控制中心布局的 AUTO 根条目各改一个可见性字节，其它 class 内容保持不变；复用原车文字、点击事件及主题逻辑。
+输出目录必须不存在。生成 `viewhandler.candidate.jar` 和 `build.json`；工具核对原件／class 摘要、拒绝未知固件，检查 ZIP 内容和修改范围，不连接车机、不安装、不改输入。候选修改 10 个已有视图 class，加入 4 个自编辅助 class。不同构建工具链可能产生不同压缩包或编译结果，不能仅凭源码相同就宣称文件与实车版本一致。
+
+### 部署与一键回退
+
+**请完整阅读 [部署、手动重启与回退步骤](docs/DEPLOYMENT.md)，不要只复制替换命令。**
+
+固定顺序：
+
+1. 车辆停稳、挂 P 挡，核对版本，准备独立恢复入口。
+2. 暂存候选并备份当前正常 JAR，验证双方摘要。
+3. 对 `vw-hmi.service` 设置临时 runtime mask，再停止 HMI。
+4. 确认 `inactive/dead`、无 JVM、无文件描述符或内存映射占用目标。
+5. 离线写入并校验 SHA-256、inode、属主、权限和 `hmi::sub` 标签。
+6. **保持 HMI 停止，由用户手动完整重启车机，再验证。** 不以单独重启 HMI 服务替代。
+
+`safe-update/main.go` 是本轮实车使用的离线门禁工具源码。**其 `prepare` 仅接受本轮安装前版本摘要 `9113535…42c85`，不接受任意原厂或第三方版本，也不是所有 S2995 的通用安装器。** 不要改写摘要或跳过门禁强行安装。
+
+本轮已部署车辆保留的一键回退命令：
 
 ```sh
-DAYNIGHT_VIEW_JAR=/path/to/original/viewhandler.jar python3 -m unittest discover -s native-auto-menu
+ssh root@10.173.189.1 'sh /data/vw-daynight-menu-20261123-clickfix/restore.sh'
 ```
 
-未提供厂商原件时，测试会明确跳过依赖原件的范围检查。CI 不下载固件。
+**仅适用于已执行本轮部署且该备份目录存在的车辆。** 它先停止 HMI，再恢复本车部署前正常版本；执行成功后仍需手动完整重启。其他车辆应按部署文档在自己的备份目录生成对应脚本，不可直接套用这个路径。
 
-### 装车与使用记录
+### 源码目录与历史方案
 
-实车已验证的位置为 `/vw/hmi/Resources/skin1/viewhandler.jar`。下拉框一次显示两行，在列表内向上滑动可见第三项“自动”。选择 AUTO 后，按原车大灯状态验证主题变化。
+| 目录 | 用途 |
+|---|---|
+| `menu/` | 当前完整菜单补丁的 Go 构建器及 Java 源码 |
+| `safe-update/` | 实车使用的一次性 Linux ARM64 离线更新门禁工具 |
+| `docs/` | 部署、恢复、实现及验证边界 |
+| `native-auto-menu/` | 历史仅恢复 AUTO 可见性的 Python 工具，不包含当前状态／切换／三行修复 |
 
-装车前应核对版本和摘要、保存本车原件及标签，并准备独立恢复入口。本项目不提供通用一键安装器。实车发现 `cp -a` 没有保留 SMACK 标签，因此不能据此假定替换文件后权限完整；已验证的更新保留了目标 inode 及原标签。此文件的原访问标签为 `hmi::sub`。
+历史桥接方案已撤回：在 `/vw/hmi/lib/` 添加 JAR 会改变 boot classpath，与原厂共享归档不匹配；已复现 `shared class paths mismatch` 导致 JVM 初始化失败。不要沿用旧方案。在线覆盖已打开的 JAR 也已复现读取异常，不能再使用这种安装或恢复方式。
 
-应用或恢复文件后，实车使用完整车机重启验证。单独重启 HMI 服务未建立可靠流程。原 HMI 服务带 `FailureAction=reboot-immediate` 和 watchdog，启动异常可能引发整机重启。
+### 许可证
 
-### 回退
-
-使用本车安装前备份恢复 `viewhandler.jar`，保留原文件权限和 SMACK 标签，然后完整重启车机。无需撤销额外调度服务，因为当前方案没有此类服务。
-
-历史桥接方案已撤回：向 `/vw/hmi/lib/` 增加 JAR 会改变 boot classpath，与原厂 `classes.jza` 共享归档不匹配；已在相同 JVM 和缓存输入下复现 `shared class paths mismatch`，导致 JVM 初始化失败。不要按旧版本说明重新安装桥接模块。
-
-### 许可证与边界
-
-自编源码采用 MIT；厂商固件、原厂／修改后 JAR、凭据及车辆数据不随仓库分发。生成的候选文件留在本地。本项目与大众及供应商无隶属或背书关系。
+自编源码采用 MIT。厂商固件、原厂或修改后的 JAR、提取的接口类、共享缓存、车辆数据及凭据不随仓库分发。生成文件留在本地。本项目与大众及供应商无隶属或背书关系。
 
 ## English
 
-Restores the hidden native AUTO day/night menu on the inspected Chinese ICAS3 S2995 build, building on the AGL root method provided by [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root).
+Restores native headlight-linked AUTO on the inspected Chinese ICAS3 S2995 / HCN1.1.134 build, using the AGL root method provided by [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root). The current adapter preserves the saved AUTO selection, shows all three rows, and handles manual selection when AUTO already produces the same effective theme. The user reported successful vehicle validation after a manual full headunit reboot on 2026-11-23; this is not an exhaustive or long-term reliability claim.
 
-On 2026-11-22 the user confirmed that AUTO appears after a full headunit reboot and the theme follows changes in headlight state. With headlights set to AUTO, environmental decisions remain with the factory lighting system. Weather and tunnel scenarios have not been individually tested. AUTO persistence across another full reboot remains unverified.
+Only `viewhandler.jar` is replaced. The main JAR, startup scripts, bundles, boot classpath and shared archives remain unchanged. Go builds the patch offline and provides a one-shot deployment gate; there is no Go background controller or solar/time policy.
 
-The current release contains only the visibility patch generator and checks. Fixed-time/solar policies, the Go controller, Java bridge and custom selector have been removed. The HMI main JAR, startup script, bundle configuration and preload archives remain factory files. The menu may highlight the effective day/night mode after AUTO is selected; the confirmed vehicle still follows headlight changes.
+**Stop and runtime-mask HMI, confirm there are no JVM/JAR readers, then apply or restore. Never overwrite a live JAR. After either operation, leave HMI stopped and manually reboot the complete headunit.** Unverified HMI modifications must not be attached directly to startup: the factory watchdog and `FailureAction=reboot-immediate` can cause a reboot loop if the same failing build is loaded at every boot. Preserve an independent recovery channel and same-vehicle backups.
 
-Supply the matching original `viewhandler.jar` locally and run the Python command above. The tool checks the source hash, changes one visibility byte in each of two layout classes, and writes a new candidate without installing it or altering its input. Run tests with `DAYNIGHT_VIEW_JAR`. Preserve same-vehicle backups, original file labels and an independent recovery path; use a full headunit reboot for validation.
-
-The previous bridge installation changed the boot classpath and failed against the factory shared archive with `shared class paths mismatch`; it has been withdrawn. No vendor binaries or firmware are distributed. MIT covers authored code only.
+See [deployment and rollback](docs/DEPLOYMENT.md) and [implementation](docs/IMPLEMENTATION.md). The published update tool is pinned to the tested previous version, not a universal installer. No vendor binaries are distributed. MIT covers authored code only.
