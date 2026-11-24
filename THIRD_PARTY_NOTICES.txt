@@ -3,7 +3,7 @@ ICAS3 AGL Day/Night
 Authored code uses the Go standard library and JDK facilities. The offline
 builder uses the JDK 17 internal ASM API through explicit --add-exports flags.
 The small Java menu adapter links to vendor interfaces provided locally by the
-user. The versioned JAR inputs are stored under source/2995 with a SHA-256 manifest.
+user. The versioned JAR inputs are stored under source/<version> with a SHA-256 manifest.
 These vendor materials retain their original rights and are not covered by MIT.
 
 Go builds the one-shot Attach executable. Python orchestrates the single build
@@ -11,7 +11,7 @@ pipeline; JDK compiles the adapter once and transforms selected class files.
 There is no background theme controller. There is no solar/time scheduler,
 network weather service, external bridge JAR, or additional startup service.
 
-The bundled source/2995 JARs and modified classes embedded in build artifacts
+The bundled source/<version> JARs and modified classes embedded in build artifacts
 are vendor-derived materials. Shared caches, vehicle data and credentials are
 not included.
 The MIT license applies to authored code, not to vendor binaries or resources.

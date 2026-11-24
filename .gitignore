@@ -25,3 +25,6 @@ __pycache__/
 !/source/2995/viewhandler.jar
 !/source/2995/MIBHMI-STD-HCN1.1.134-bin.jar
 !/source/2995/osgi.jar
+!/source/3001/viewhandler.jar
+!/source/3001/MIBHMI-STD-HCN1.1.153-bin.jar
+!/source/3001/osgi.jar

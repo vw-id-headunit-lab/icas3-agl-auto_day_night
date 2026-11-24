@@ -20,6 +20,18 @@ class VersionRulesTests(unittest.TestCase):
     def setUp(self):
         self.metadata = json.loads((ROOT/'source/2995/inputs.json').read_text())
 
+    def test_version_identity_is_distinct_and_targets_are_verified_for_both(self):
+        versions = [load_inputs(version, ROOT)[0] for version in ('2995','3001')]
+        self.assertNotEqual(versions[0]['files']['view_jar']['sha256'], versions[1]['files']['view_jar']['sha256'])
+        self.assertNotEqual(versions[0]['files']['hmi_jar']['sha256'], versions[1]['files']['hmi_jar']['sha256'])
+        self.assertEqual(versions[0]['patch'], versions[1]['patch'])
+        for version in ('2995','3001'):
+            metadata, paths = load_inputs(version, ROOT)
+            with zipfile.ZipFile(paths['view_jar']) as jar:
+                for target in metadata['patch']['targets']:
+                    name = metadata['patch']['class_prefix']+target['name']+'.class'
+                    self.assertEqual(sha(jar.read(name)), target['sha256'])
+
     def test_invalid_target_sets_are_rejected(self):
         for change in ('duplicate', 'missing_row', 'dimensions'):
             spec = copy.deepcopy(self.metadata['patch'])
@@ -61,19 +73,21 @@ class DirectDefinitionsTests(unittest.TestCase):
     def test_only_pinned_definitions_are_built_without_candidate_jar(self):
         spec = importlib.util.spec_from_file_location('direct_attach_build', ROOT/'attach/build.py')
         builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
-        metadata, paths = load_inputs('2995', ROOT)
-        before = sha(paths['view_jar'].read_bytes())
-        with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
-            entries = builder.build_definitions(metadata, paths['view_jar'], Path(JDK)/'bin', work)
-            expected = {'patched/'+metadata['patch']['class_prefix']+target['name']+'.class'
-                        for target in metadata['patch']['targets']}
-            self.assertEqual(set(entries), expected | {'pins.properties'})
-            self.assertFalse(list(work.rglob('*.jar')))
-            with zipfile.ZipFile(paths['view_jar']) as original:
-                for entry in expected:
-                    content = entries[entry]
-                    self.assertEqual(content[:4], b'\xca\xfe\xba\xbe')
-                    self.assertEqual(int.from_bytes(content[6:8], 'big'), 52)
-                    self.assertNotEqual(content, original.read(entry.removeprefix('patched/')))
-        self.assertEqual(sha(paths['view_jar'].read_bytes()), before)
+        for version in ('2995','3001'):
+            with self.subTest(version=version):
+                metadata, paths = load_inputs(version, ROOT)
+                before = sha(paths['view_jar'].read_bytes())
+                with tempfile.TemporaryDirectory() as tmp:
+                    work = Path(tmp)
+                    entries = builder.build_definitions(metadata, paths['view_jar'], Path(JDK)/'bin', work)
+                    expected = {'patched/'+metadata['patch']['class_prefix']+target['name']+'.class'
+                                for target in metadata['patch']['targets']}
+                    self.assertEqual(set(entries), expected | {'pins.properties'})
+                    self.assertFalse(list(work.rglob('*.jar')))
+                    with zipfile.ZipFile(paths['view_jar']) as original:
+                        for entry in expected:
+                            content = entries[entry]
+                            self.assertEqual(content[:4], b'\xca\xfe\xba\xbe')
+                            self.assertEqual(int.from_bytes(content[6:8], 'big'), 52)
+                            self.assertNotEqual(content, original.read(entry.removeprefix('patched/')))
+                self.assertEqual(sha(paths['view_jar'].read_bytes()), before)
