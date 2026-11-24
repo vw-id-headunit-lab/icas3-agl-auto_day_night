@@ -2,102 +2,262 @@
 
 [简体中文](#简体中文) | [English](#english)
 
-中国版 ICAS3 S2995 / HMI HCN1.1.134 原厂日夜主题 AUTO 菜单恢复与状态修复。基于 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 提供的 AGL root 方法进一步开发。
-
 ## 简体中文
 
-**2026-11-23：用户在手动完整重启后确认本轮实车验证通过。** 当前版本恢复 AUTO 入口、保持 AUTO 选中状态、一次显示日间／夜间／自动三行，并修复 AUTO 与当前实际主题相同时无法切换到手动模式的问题。
+车机只需部署 **`daynight-patch` 一个 Linux ARM64 可执行文件**，直接运行即可自动找到 HMI 并加载补丁。
+安装和卸载均无需停止或重启 HMI，原厂 JAR 保持不变。
 
-> **部署前必须先停止 HMI，并确认没有 JVM 或其它进程占用目标 JAR，才能替换文件。部署完成后由用户手动完整重启车机。回退也遵循同一流程。禁止在线覆盖运行中的 JAR。**
->
-> **HMI 改动不要未经验证就直接挂开机自启。原车服务带 watchdog 和 `FailureAction=reboot-immediate`：启动持续失败或 watchdog 超时可能触发整机重启；若重启后仍加载同一故障版本，可能形成循环重启。应先准备独立 SSH／控制台恢复入口及回退文件，再进行受控验证。** 本项目不新增自启服务，也不关闭或改写原厂 watchdog／失败处理策略。
+适用于中国版 ICAS3 S2995 / HMI HCN1.1.134，恢复日间／夜间／自动三行菜单，并修复 AUTO 选中状态与手动切换。
+基于 [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root) 提供的 AGL root 方法开发。
 
-### 功能与工作方式
+### 快速使用
 
-- 控制中心显示“日间、夜间、自动”三项，无需滚动查找 AUTO。
-- 选择 AUTO 后，菜单显示保存的 AUTO 选择；实际主题仍随原车大灯状态变化。
-- 大灯置于 AUTO 时，由原车灯光系统根据环境控制大灯。本项目不自行检测天气、隧道或照度。
-- 保留手动日间／夜间选择；即使 AUTO 的实际主题与所点手动模式相同，也能退出 AUTO。
-- 无固定时间、日出日落、定位、联网或常驻 Go 控制器。
-
-**装车只替换 `/vw/hmi/Resources/skin1/viewhandler.jar`。** 不修改 HMI 主 JAR、`runHMI.sh`、`bundles.properties`、启动类路径或原厂预加载缓存；不向 `/vw/hmi/lib` 添加桥接 JAR。
-
-Go 负责本地构建及一次性离线文件更新；菜单内运行的是最小 Java 适配器。异步读取原厂保存模式并在 UI 线程刷新，绘制函数不等待同步持久化读取。只在明确点击且读回模式与所选值不一致时，最多补发一次原厂切换请求，避免原厂按“实际主题”去重而跳过手动选择。普通显示读取不会切换模式。实现细节见 [实现与验证](docs/IMPLEMENTATION.md)。
-
-### 验证状态与范围
-
-| 项目 | 记录 |
-|---|---|
-| AUTO 入口及大灯变化驱动主题 | 2026-11-22 用户实车确认 |
-| 三行菜单、AUTO 选中状态 | 本地虚拟 HMI 验证及实车反馈通过 |
-| 本轮切换修复 | 2026-11-23 停止 HMI 后部署，用户手动完整重启后确认实车验证无问题 |
-| 当前实车候选 SHA-256 | `283ed23a372531d1d2274d459e14b096474dbb717f4a618791bb38148c396460` |
-| AUTO 跨另一次完整重启的持续保持 | 尚未单独确认 |
-| 长时间运行、极端快速点击、天气／隧道、导航／CarPlay／仪表联动 | 未逐项完成验证 |
-| 其它车型、地区、软件版本 | 未验证；不能直接套用 |
-
-这里的“通过”为用户本轮实车反馈，不代表所有功能或长期稳定性均已覆盖。已核对输入摘要见 [firmware.json](firmware.json)。
-
-### 从源码构建
-
-需要 Go 1.23 或更新版本、JDK 17，以及自行提供的对应固件原始 `viewhandler.jar` 与 `MIBHMI-STD-HCN1.1.134-bin.jar`。主 JAR 仅供编译接口使用，**不替换它**。
+把构建得到的 `daynight-patch` 复制到车机，以 HMI 所属用户或 root 执行：
 
 ```sh
-cd menu
-go run ./cmd/daynightlab \
-  --sources . \
+chmod +x ./daynight-patch
+./daynight-patch          # 加载补丁
+./daynight-patch status   # 查询状态
+./daynight-patch remove   # 卸载并恢复原菜单
+```
+
+默认自动识别唯一的 HMI JVM，无需指定 PID、JAR 路径或 `--report`。
+控制中心应先完成初始化；若提示菜单未就绪，先打开一次控制中心，再运行补丁。
+检测到多个 HMI JVM 时可用 `./daynight-patch --pid 1234` 明确选择。
+
+源码、构建依赖和固件输入留在开发机，车机只复制补丁可执行文件；原车系统文件保持原样。
+重启 HMI 后补丁消失，需要再次运行；项目不添加自启服务。
+
+### 功能
+
+- 控制中心同时显示“日间、夜间、自动”三行。
+- 选择 AUTO 后，菜单保持“自动”选中，实际主题跟随原车日夜信号。
+- AUTO 的实际主题与目标手动模式相同时，仍可切回手动日间或夜间。
+- 动态更新已经创建的菜单，无需重新启动界面。
+- 支持查询、卸载恢复和重复加载；卸载保留用户当前选择的日夜模式。
+
+
+主题切换使用原厂日夜信号。
+
+### 临时文件与诊断
+
+结果直接输出到终端，正常使用不会在 `/data` 下写入报告：
+
+| 文件 | 位置与清理方式 |
+| --- | --- |
+| 临时 Agent／helper JAR | 目标 JVM 的 `/tmp`；操作完成、取得结果后删除 |
+| 默认报告 | `/tmp` 随机文件；读取并打印后立即删除 |
+| 操作锁 | 每个 JVM／构建复用一个小型锁目录，随 `/tmp` 清空 |
+
+若操作超时、结果不确定，会暂留 `/tmp` 文件，供尚未结束的 Agent 完成操作。
+需要保留一次诊断结果时，可选用新的 `/tmp` 文件：
+
+```sh
+./daynight-patch status --report /tmp/daynight-status-01.json
+```
+
+显式指定的报告会保留，已有文件不覆盖；`/data` 下的报告路径会被拒绝。
+`RECOVERY_REQUIRED` 表示恢复未完成，先执行 `./daynight-patch remove`。
+卸载恢复原视图、控件和监听器，并保留用户选择的日夜模式；helper 类和 Attach 原生库可能保留至 JVM 退出。
+
+详细说明见 [Attach 使用说明](attach/README.md)。
+
+### 支持环境与构建输入
+
+需要 AGL root、Java 8 HotSpot Attach、类重定义和类重转换能力。执行用户应为 JVM 所属用户或 root，控制中心应已初始化。
+
+构建需要 Python 3.11+、Go 1.23+、JDK 17+。当前输入文件已放在 `source/2995/`，仅用于开发机和 CI 编译：
+
+| 文件 | SHA-256 / 用途 |
+| --- | --- |
+| 原始 `viewhandler.jar` | `9bd5764fabe2cf79e5193f2dd39c38954f6170a8f016c229c133e2b8165a1ce1` |
+| 原始 `MIBHMI-STD-HCN1.1.134-bin.jar` | `c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17` |
+| 同一固件的 `osgi.jar` | 仅用于本地编译接口 |
+
+不匹配的固件或已存在的其它补丁 helper 会被拒绝。其它车型、地区和软件版本未验证。
+
+### 从源码构建（开发机）
+
+从仓库根目录执行，输出目录必须不存在：
+
+```sh
+python3 attach/build.py \
+  --version 2995 \
   --jdk /path/to/jdk17 \
-  --view-jar /path/to/original/viewhandler.jar \
-  --hmi-jar /path/to/original/MIBHMI-STD-HCN1.1.134-bin.jar \
-  --output /path/to/new-candidate-directory
+  --output /tmp/daynight-2995
 ```
 
-输出目录必须不存在。生成 `viewhandler.candidate.jar` 和 `build.json`；工具核对原件／class 摘要、拒绝未知固件，检查 ZIP 内容和修改范围，不连接车机、不安装、不改输入。候选修改 10 个已有视图 class，加入 4 个自编辅助 class。不同构建工具链可能产生不同压缩包或编译结果，不能仅凭源码相同就宣称文件与实车版本一致。
+输出内容：
 
-### 部署与一键回退
+| 文件 | 使用位置 |
+| --- | --- |
+| `daynight-patch` | 复制到车机的唯一补丁文件，已内置 Agent 和辅助代码 |
+| `build.json` | 留在开发机，核对补丁 SHA-256 |
 
-**请完整阅读 [部署、手动重启与回退步骤](docs/DEPLOYMENT.md)，不要只复制替换命令。**
+构建过程不连接车机、不安装补丁。构建产物保留原固件内容的权利边界。固件输入与生成补丁不属于项目 MIT 授权范围。
 
-固定顺序：
+### GitHub 自动构建
 
-1. 车辆停稳、挂 P 挡，核对版本，准备独立恢复入口。
-2. 暂存候选并备份当前正常 JAR，验证双方摘要。
-3. 对 `vw-hmi.service` 设置临时 runtime mask，再停止 HMI。
-4. 确认 `inactive/dead`、无 JVM、无文件描述符或内存映射占用目标。
-5. 离线写入并校验 SHA-256、inode、属主、权限和 `hmi::sub` 标签。
-6. **保持 HMI 停止，由用户手动完整重启车机，再验证。** 不以单独重启 HMI 服务替代。
+推送到 `master` 时触发 `Build patch`，也可在 Actions 页面手动运行。流程验证输入摘要、运行测试、
+构建 Linux ARM64 单文件补丁，并上传 `daynight-patch-2995-linux-arm64` artifact，保留 14 天。
+压缩包包含 `daynight-patch` 和 `build.json`，另附压缩包 SHA-256；车机只需复制补丁文件。
 
-`safe-update/main.go` 是本轮实车使用的离线门禁工具源码。**其 `prepare` 仅接受本轮安装前版本摘要 `9113535…42c85`，不接受任意原厂或第三方版本，也不是所有 S2995 的通用安装器。** 不要改写摘要或跳过门禁强行安装。
+版本输入按 `source/<版本>/` 组织。增加其它版本时需完成适配，再更新构建矩阵；当前只启用 `2995`。
 
-本轮已部署车辆保留的一键回退命令：
+### 验证状态
 
-```sh
-ssh root@10.173.189.1 'sh /data/vw-daynight-menu-20261123-clickfix/restore.sh'
-```
+2026-11-24，在 QEMU AGL / 原厂 Zulu 8.48.51.251 ARM64 JVM 中验证：
 
-**仅适用于已执行本轮部署且该备份目录存在的车辆。** 它先停止 HMI，再恢复本车部署前正常版本；执行成功后仍需手动完整重启。其他车辆应按部署文档在自己的备份目录生成对应脚本，不可直接套用这个路径。
+- 已运行的菜单从两行动态变为三行，AUTO 选中及菜单重开正常。
+- 模拟日夜信号可切换实际主题，AUTO 保存值保持不变。
+- AUTO 可切回相同外观的手动日间或夜间模式。
+- 卸载恢复、再次加载和重复加载正常，JVM PID 与启动时间保持不变。
+- 原 `viewhandler.jar` SHA-256 保持不变。
+- 24 项自动化测试通过，Go race 检查、vet 和 Linux ARM64 构建通过。
 
-### 源码目录与历史方案
+实车 Attach、真实灯光硬件、长期稳定性和跨重启保存尚未验证。虚拟机结果不代表实车验收。
+修复与验证详情见 [代码 review 与重构](docs/CODE_REVIEW.md)。
 
-| 目录 | 用途 |
-|---|---|
-| `menu/` | 当前完整菜单补丁的 Go 构建器及 Java 源码 |
-| `safe-update/` | 实车使用的一次性 Linux ARM64 离线更新门禁工具 |
-| `docs/` | 部署、恢复、实现及验证边界 |
-| `native-auto-menu/` | 历史仅恢复 AUTO 可见性的 Python 工具，不包含当前状态／切换／三行修复 |
+### 源码结构
 
-历史桥接方案已撤回：在 `/vw/hmi/lib/` 添加 JAR 会改变 boot classpath，与原厂共享归档不匹配；已复现 `shared class paths mismatch` 导致 JVM 初始化失败。不要沿用旧方案。在线覆盖已打开的 JAR 也已复现读取异常，不能再使用这种安装或恢复方式。
+| 路径 | 用途 |
+| --- | --- |
+| `attach/` | Agent、Attach 客户端、构建器及回归测试 |
+| `menu/` | 菜单适配器与视图补丁构建逻辑 |
+| `docs/` | 实现、review 与验证说明 |
+| `source/2995/` | 当前固件的构建输入与摘要清单 |
+| `firmware.json` | 已核对的固件输入摘要与验证元数据 |
 
 ### 许可证
 
-自编源码采用 MIT。厂商固件、原厂或修改后的 JAR、提取的接口类、共享缓存、车辆数据及凭据不随仓库分发。生成文件留在本地。本项目与大众及供应商无隶属或背书关系。
+自编源码采用 MIT。`source/2995/` 中的固件 JAR 及构建出的修改类仍归原权利人；MIT 仅覆盖自编源码。车辆数据及凭据不随项目分发。本项目与大众及供应商无隶属或背书关系。
 
 ## English
 
-Restores native headlight-linked AUTO on the inspected Chinese ICAS3 S2995 / HCN1.1.134 build, using the AGL root method provided by [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root). The current adapter preserves the saved AUTO selection, shows all three rows, and handles manual selection when AUTO already produces the same effective theme. The user reported successful vehicle validation after a manual full headunit reboot on 2026-11-23; this is not an exhaustive or long-term reliability claim.
+Deploy just **`daynight-patch`, a single Linux ARM64 executable**, to the headunit. Run it to detect the HMI JVM and attach the patch automatically.
+Installation and removal require no HMI stop or restart; the factory JARs remain unchanged.
 
-Only `viewhandler.jar` is replaced. The main JAR, startup scripts, bundles, boot classpath and shared archives remain unchanged. Go builds the patch offline and provides a one-shot deployment gate; there is no Go background controller or solar/time policy.
+Targets the inspected Chinese ICAS3 S2995 / HMI HCN1.1.134 build. It restores the Day / Night / Auto menu and fixes saved AUTO selection and manual switching.
+Built on the AGL root method provided by [ICAS3 AGL Root](https://github.com/vw-id-headunit-lab/icas3-agl-root).
 
-**Stop and runtime-mask HMI, confirm there are no JVM/JAR readers, then apply or restore. Never overwrite a live JAR. After either operation, leave HMI stopped and manually reboot the complete headunit.** Unverified HMI modifications must not be attached directly to startup: the factory watchdog and `FailureAction=reboot-immediate` can cause a reboot loop if the same failing build is loaded at every boot. Preserve an independent recovery channel and same-vehicle backups.
+### Quick start
 
-See [deployment and rollback](docs/DEPLOYMENT.md) and [implementation](docs/IMPLEMENTATION.md). The published update tool is pinned to the tested previous version, not a universal installer. No vendor binaries are distributed. MIT covers authored code only.
+Copy the built `daynight-patch` to the headunit and run it as the HMI JVM owner or root:
+
+```sh
+chmod +x ./daynight-patch
+./daynight-patch          # Install the patch
+./daynight-patch status   # Query status
+./daynight-patch remove   # Remove and restore the original menu
+```
+
+The executable detects the unique HMI JVM automatically. No PID, JAR path or `--report` is required.
+The control center must have initialized; if the patch reports that the menu is not ready, open the control center once and run it again.
+If multiple HMI JVMs are detected, select one with `./daynight-patch --pid 1234`.
+
+Keep sources, build dependencies and firmware inputs on the development machine. Copy only the patch executable to the headunit; leave factory system files in place.
+Restarting HMI clears the patch; run it again to enable it. No startup service is installed.
+
+### Features
+
+- Shows Day, Night and Auto together in the control center.
+- Preserves the Auto selection while the effective theme follows the factory day/night signals.
+- Allows switching from Auto to the manual mode that already matches the effective theme.
+- Updates existing menu widgets without restarting the interface.
+- Supports status queries, removal, reinstallation and repeated installation. Removal preserves the user's selected day/night mode.
+
+
+Theme switching uses the factory day/night signals.
+
+### Temporary files and diagnostics
+
+Results are printed to the terminal. Normal use does not write reports under `/data`:
+
+| File | Location and cleanup |
+| --- | --- |
+| Temporary Agent / helper JARs | Target JVM's `/tmp`; deleted once the operation completes and its result is read |
+| Default report | Random file under `/tmp`; deleted after reading and printing |
+| Operation lock | One small directory reused per JVM / build; removed when `/tmp` is cleared |
+
+If an operation times out with an unknown outcome, temporary files are retained under `/tmp` so an Agent still running can finish.
+To keep a diagnostic result, optionally specify a new `/tmp` file:
+
+```sh
+./daynight-patch status --report /tmp/daynight-status-01.json
+```
+
+Explicit reports are retained and existing files are never overwritten. Report paths under `/data` are rejected.
+`RECOVERY_REQUIRED` means restoration is incomplete; run `./daynight-patch remove` first.
+Removal restores original views, widgets and listeners while preserving the selected day/night mode. Helper classes and Attach native libraries may remain until the JVM exits.
+
+See the [Attach guide](attach/README.md) for details.
+
+### Supported environment and build inputs
+
+Requires AGL root, Java 8 HotSpot Attach, class redefinition and retransformation. Run as the JVM owner or root, after the control center has initialized.
+
+Building requires Python 3.11+, Go 1.23+ and JDK 17+. The current inputs are stored under `source/2995/` and used only by the development machine and CI:
+
+| File | SHA-256 / purpose |
+| --- | --- |
+| Original `viewhandler.jar` | `9bd5764fabe2cf79e5193f2dd39c38954f6170a8f016c229c133e2b8165a1ce1` |
+| Original `MIBHMI-STD-HCN1.1.134-bin.jar` | `c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17` |
+| `osgi.jar` from the same firmware | Local compilation interfaces only |
+
+Mismatched firmware and existing helpers from another patch build are rejected. Other vehicles, regions and software versions have not been verified.
+
+### Build from source (development machine)
+
+Run from the repository root. The output directory must not already exist:
+
+```sh
+python3 attach/build.py \
+  --version 2995 \
+  --jdk /path/to/jdk17 \
+  --output /tmp/daynight-2995
+```
+
+Build outputs:
+
+| File | Where it is used |
+| --- | --- |
+| `daynight-patch` | The only patch file copied to the headunit; embeds the Agent and helper code |
+| `build.json` | Kept on the development machine to verify the patch SHA-256 |
+
+Building does not connect to a headunit or install the patch. Firmware inputs and the generated patch retain their original rights and are outside the project’s MIT grant.
+
+### GitHub automatic build
+
+A push to `master` triggers `Build patch`; it can also be started manually from Actions. The workflow verifies input digests,
+runs tests, builds the Linux ARM64 single-file patch and uploads the `daynight-patch-2995-linux-arm64` artifact for 14 days.
+The archive contains `daynight-patch` and `build.json`, with a separate archive SHA-256 file. Copy only the executable to the headunit.
+
+Versioned inputs live under `source/<version>/`. Implement compatibility before adding a version to the workflow matrix; only `2995` is currently enabled.
+
+### Verification
+
+Verified on 2026-11-24 in QEMU AGL with the factory Zulu 8.48.51.251 ARM64 JVM:
+
+- A running two-row menu becomes three rows; Auto selection and menu reopening work.
+- Simulated day/night signals change the effective theme while preserving the saved Auto mode.
+- Auto can switch to manual Day or Night even when the effective theme already matches.
+- Removal, reinstallation and repeated installation work with unchanged JVM PID and start time.
+- The original `viewhandler.jar` SHA-256 remains unchanged.
+- All 24 automated tests pass, along with Go race checks, vet and Linux ARM64 builds.
+
+Real-vehicle Attach, physical lighting hardware, long-term stability and persistence across reboots have not been verified. VM results do not establish vehicle validation.
+See the [code review and refactoring record](docs/CODE_REVIEW.md) for fixes and verification details.
+
+### Source layout
+
+| Path | Purpose |
+| --- | --- |
+| `attach/` | Agent, Attach client, builder and regression tests |
+| `menu/` | Menu adapter and view patch build logic |
+| `docs/` | Implementation, review and verification notes |
+| `source/2995/` | Current firmware build inputs and digest manifest |
+| `firmware.json` | Verified firmware input digests and validation metadata |
+
+### License
+
+Authored source code is licensed under MIT. Firmware JARs under `source/2995/` and derived modified classes retain their original rights; MIT covers authored source code only. Vehicle data and credentials are not distributed. This project is not affiliated with or endorsed by Volkswagen or its suppliers.

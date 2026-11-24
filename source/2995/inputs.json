@@ -1,0 +1,18 @@
+{
+  "firmware_version": "2995",
+  "hmi_version": "HCN1.1.134",
+  "files": {
+    "view_jar": {
+      "path": "viewhandler.jar",
+      "sha256": "9bd5764fabe2cf79e5193f2dd39c38954f6170a8f016c229c133e2b8165a1ce1"
+    },
+    "hmi_jar": {
+      "path": "MIBHMI-STD-HCN1.1.134-bin.jar",
+      "sha256": "c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17"
+    },
+    "osgi_jar": {
+      "path": "osgi.jar",
+      "sha256": "69a64d1a1c4dd99b292f9d52af0bb25ad9d6d6b1260f6ce03f7fc7608b43844b"
+    }
+  }
+}

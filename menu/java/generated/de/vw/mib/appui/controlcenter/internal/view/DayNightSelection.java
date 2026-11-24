@@ -17,15 +17,25 @@ public final class DayNightSelection implements OutEventListener,Runnable {
  private static final Map<Object,Method> views=new WeakHashMap<>();
  private static int saved=-1;
  private static boolean requesting;
- private static long epoch, sequence, activeRequest, requestStarted;
+ private static long sequence, requestStarted;
+ private static volatile long epoch, activeRequest;
  private static Timer timer;
  private static DayNightSelection pending;
  private int remaining;
  private final int wantedMode;
  private long click;
- private static volatile long latestClick,attemptedClick;
+ private static volatile long latestClick;
+ private static final java.util.concurrent.atomic.AtomicLong attemptedClick=new java.util.concurrent.atomic.AtomicLong();
  private DayNightSelection(int mode) {wantedMode=mode;}
  private static Invoker ui(){return de.vw.mib.widgets.internal.ServiceManager.eventDispatcher;}
+ /** Called on the UI thread when the runtime agent is removed. */
+ public static void shutdown(){
+  epoch++;requesting=false;latestClick++;pending=null;saved=-1;
+  if(timer!=null){timer.stop();timer=null;}
+  for(Map.Entry<WidgetController,DayNightSelection> entry:listeners.entrySet())
+   entry.getKey().removeOutEventListener(entry.getValue());
+  listeners.clear();views.clear();
+ }
  private static void redraw(){
   for(Object view:views.keySet().toArray()){
    Method method=views.get(view);
@@ -81,10 +91,14 @@ public final class DayNightSelection implements OutEventListener,Runnable {
       private Integer mode;
       public void getDayNightModeResult(int value){mode=value;}
       public void request_finished(int result){
-       if(result==0&&mode!=null&&desired>=0&&mode!=desired&&click==latestClick&&attemptedClick!=click){
+       // A late response must not write after timeout, a newer request, or uninstall.
+       if(expectedEpoch!=epoch||request!=activeRequest)return;
+       long previousAttempt=attemptedClick.get();
+       if(result==0&&mode!=null&&desired>=0&&mode!=desired&&click==latestClick
+          &&previousAttempt!=click&&attemptedClick.compareAndSet(previousAttempt,click)){
         // Factory UI can incorrectly discard manual selection equal to effective theme.
         // Only one intervention per explicit click; uncertain writes are never retried.
-        attemptedClick=click;trace("explicit-click correction mode="+desired+" saved="+mode);
+        trace("explicit-click correction mode="+desired+" saved="+mode);
         api.requests().setDayNightMode(new SystemBaseAPI.Response.Adapter(){
          public void request_finished(int code){
           if(code!=0){deliver(expectedEpoch,request,-1);return;}

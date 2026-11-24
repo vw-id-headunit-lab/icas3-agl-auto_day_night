@@ -10,6 +10,8 @@
 !/menu/
 !/safe-update/
 !/docs/
+!/attach/
+!/source/
 __pycache__/
 *.py[cod]
 *.class
@@ -22,3 +24,8 @@ __pycache__/
 *.tar.gz
 *.token
 *.local.json
+
+# Versioned inputs used by the master build.
+!/source/2995/viewhandler.jar
+!/source/2995/MIBHMI-STD-HCN1.1.134-bin.jar
+!/source/2995/osgi.jar

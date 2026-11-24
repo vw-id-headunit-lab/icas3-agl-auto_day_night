@@ -1,5 +1,26 @@
 # 实现与验证记录
 
+## 运行时 Attach（2026-11-24）
+
+部署入口现为单个 `daynight-patch`，内置 Agent/helper，自动识别 HMI。临时 JAR 与结果均位于目标 JVM 的 `/tmp`，操作完成读取后清理；无需传入报告参数。
+
+新增 `attach/`：通过 HotSpot 本地 Attach 协议调用 Java 8 `agentmain`，在原 UI dispatcher 中
+以 Instrumentation 一次性重定义十个现有视图类。构建时保留 Java 8 目标格式与原类结构，
+运行时核对原 JAR 和目标 class 摘要，捕获真实内存定义用于卸载。没有替换磁盘 JAR、停止 HMI
+或增加启动 Agent 参数。原厂 JRE 已存在的 `libinstrument.so` 由 Attach 按需加载。
+
+已有视图也会生效：通过原 DesktopManager 查找 control center 的现存节点，在 UI 线程调整
+三个下拉框高度、显示 AUTO 行、补挂读取／点击监听。未来创建的视图由重定义后的生命周期方法接入。
+卸载恢复原类定义、现存控件尺寸和可见性，并停止补丁定时器、移除补丁监听器。
+helper class 和已加载 native 库不会从 JVM 中卸载，但恢复后的视图不再调用它们。
+
+在原厂 ARM64 JVM 的 QEMU AGL 中已验证：两行菜单动态变为三行、AUTO 选中、
+同主题手动切换、原 DSI 模拟日夜设计信号驱动主题、卸载回两行及重复加载。
+用 JVM PID、`/proc/PID/stat` 启动 tick 和 RuntimeMXBean start time 核对同一进程，
+磁盘 `viewhandler.jar` 保持原摘要。没有实车 Attach 验证，也没有自动重新加载或自启安装。
+
+下面的实车记录与完整重启要求保留为旧版文件安装历史；不作为新 Attach 版本的实车结果。
+
 ## 当前菜单与状态
 
 原厂存在日间 0、夜间 1、AUTO 2 三种保存模式，但控制中心使用的日夜属性可能发布实际主题 0／1。用实际主题直接渲染菜单，会把 AUTO 显示成日间或夜间。原厂控制中心适配器还会把点击的模式与实际主题缓存比较；若相同就跳过原厂设置请求，导致 AUTO→当前同主题手动模式没有退出 AUTO。

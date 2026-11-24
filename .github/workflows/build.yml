@@ -1,0 +1,67 @@
+name: Build patch
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-patch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Firmware ${{ matrix.firmware }} / Linux ARM64
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        firmware: ['2995']
+    env:
+      FIRMWARE_VERSION: ${{ matrix.firmware }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test Attach client
+        working-directory: attach
+        run: |
+          go test -race ./...
+          go vet ./...
+      - name: Test Agent and build boundaries
+        run: DAYNIGHT_TEST_JDK="$JAVA_HOME" python3 -m unittest discover -s attach/tests -v
+      - name: Build single-file patch
+        run: |
+          mkdir -p dist
+          python3 attach/build.py \
+            --version "$FIRMWARE_VERSION" \
+            --jdk "$JAVA_HOME" \
+            --output "dist/$FIRMWARE_VERSION"
+      - name: Package executable and build metadata
+        run: |
+          archive="daynight-patch-${FIRMWARE_VERSION}-linux-arm64.tar.gz"
+          tar -C "dist/$FIRMWARE_VERSION" -czf "dist/$archive" daynight-patch build.json
+          (cd dist && sha256sum "$archive" > "$archive.sha256")
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daynight-patch-${{ matrix.firmware }}-linux-arm64
+          path: |
+            dist/daynight-patch-${{ matrix.firmware }}-linux-arm64.tar.gz
+            dist/daynight-patch-${{ matrix.firmware }}-linux-arm64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

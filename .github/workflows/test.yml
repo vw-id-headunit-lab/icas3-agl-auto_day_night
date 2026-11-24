@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m unittest discover -s native-auto-menu
+      - run: DAYNIGHT_VIEW_JAR=source/2995/viewhandler.jar python3 -m unittest discover -s native-auto-menu
   go-source:
     runs-on: ubuntu-latest
     steps:
@@ -21,3 +21,17 @@ jobs:
         working-directory: menu
       - run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/daynight-update" safe-update/main.go
       - run: sh -n safe-update/restore.sh
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - run: go test -race ./... && go vet ./...
+        working-directory: attach
+      - run: DAYNIGHT_TEST_JDK="$JAVA_HOME" python3 -m unittest discover -s attach/tests -v
