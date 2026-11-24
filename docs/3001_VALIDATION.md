@@ -2,16 +2,22 @@
 
 ## 输入来源
 
-用户提供原始 `viewhandler.jar` 和 `MIBHMI-STD-HCN1.1.153-bin.jar`，复制到 `source/3001/`：
+用户提供原始 `viewhandler.jar`、`MIBHMI-STD-HCN1.1.153-bin.jar` 和 `osgi.jar`，复制到 `source/3001/`：
 
 | 文件 | SHA-256 |
 | --- | --- |
 | viewhandler.jar | `781a050ef2315797e9a20a578e368948271566208c743c898a95b0b6a56f391b` |
 | MIBHMI-STD-HCN1.1.153-bin.jar | `9af3c4a335693cc7baf081dda5b938e6e5fb1dc463bb3dd1799cf2e62740819d` |
-| osgi.jar（复用 2995 编译接口） | `69a64d1a1c4dd99b292f9d52af0bb25ad9d6d6b1260f6ce03f7fc7608b43844b` |
+| osgi.jar | `69a64d1a1c4dd99b292f9d52af0bb25ad9d6d6b1260f6ce03f7fc7608b43844b` |
 
-未提供完整 3001 根镜像、资源镜像或其原始 OSGi JAR。复用 OSGi 输入仅作为构建接口，
-来源已记录在 `source/3001/inputs.json`，不声称是从 3001 提取的原件。
+3001 原始 `osgi.jar` 大小为 12062 字节，已核对 SHA-256 和逐字节比较，
+与 `source/2995/osgi.jar` 以及此前验证所用输入完全一致，仅用于编译接口。
+来源已更新至 `source/3001/inputs.json`，此前混合虚拟机验证所用 JAR 字节不变。
+完整 3001 根镜像和资源镜像尚未提供。
+
+补齐原始 OSGi 来源后，3001 单文件补丁重新构建通过，21 项 Python／Java 测试、
+7 项 Go 测试及 race／vet 检查通过。再次查询原验证 JVM，PID、启动时间及 INSTALLED 状态不变。
+本次未更换虚拟机中的补丁，下面的完整交互验证及补丁摘要对应原验证构建。
 
 ## 静态比较与构建
 
@@ -57,7 +63,7 @@ hmisoftware.base.version:=HCN1.1.153-202511201724
 整轮 JVM PID `1089`，start tick `448`，RuntimeMXBean start time `1795509886007` 保持不变。
 原 3001 JAR 摘要保持不变，磁盘上的 2995 镜像也没有回写。默认临时报告／JAR 清理，锁留在 `/tmp`。
 
-本机 3001 补丁 SHA-256：
+上述混合虚拟机验证所用 3001 补丁 SHA-256：
 
 ```text
 150bd014e80fd5f90d51d5bc0e2fdc556f9a1df4be4c9de946554a53cfd2a0be
@@ -65,8 +71,8 @@ hmisoftware.base.version:=HCN1.1.153-202511201724
 
 ## 覆盖边界
 
-以上证明这两份 3001 JAR 在当前混合 bench 环境中的编译、加载和菜单行为。
+以上证明 3001 主 JAR 和 viewhandler 在当前混合 bench 环境中的编译、加载和菜单行为。
 **不等于完整 3001 系统验证或实车验证。** 3001 原始系统库、其它资源、共享归档、
-OSGi 原件、原厂启动流程和实车灯光硬件仍需在完整环境中另测。
+原厂启动流程和实车灯光硬件仍需在完整环境中另测。
 
 CI 为 2995 和实验 3001 分别构建，下载时应选择自己的版本；摘要检查不允许交叉安装。

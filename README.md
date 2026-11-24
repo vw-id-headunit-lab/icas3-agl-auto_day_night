@@ -73,7 +73,7 @@ chmod +x ./daynight-patch
 | 2995 | HCN1.1.134 | [source/2995/inputs.json](source/2995/inputs.json) | 2995 固件虚拟 HMI |
 | 3001 | HCN1.1.153 | [source/3001/inputs.json](source/3001/inputs.json) | 实验构建；3001 原始 JAR 在 2995 底层镜像上的混合虚拟机验证 |
 
-3001 的 `osgi.jar` 复用 2995 的编译接口，来源记录在清单中；未提供完整 3001 根镜像、资源镜像和原始 OSGi JAR。
+3001 的三个原厂 JAR 均由用户提供，来源记录在清单中；其中 `osgi.jar` 已核对与 2995 逐字节相同，仅用于编译接口。完整 3001 根镜像和资源镜像尚未提供。
 各版本有独立的原 JAR 摘要校验，不能混用补丁。
 
 不匹配的固件或已存在的其它补丁 helper 会被拒绝。其它车型、地区和软件版本未验证。
@@ -206,7 +206,7 @@ Building requires Python 3.11+, Go 1.23+ and JDK 17+. Inputs are versioned under
 | 2995 | HCN1.1.134 | [source/2995/inputs.json](source/2995/inputs.json) | Virtual HMI using 2995 firmware |
 | 3001 | HCN1.1.153 | [source/3001/inputs.json](source/3001/inputs.json) | Experimental build; original 3001 JARs in a hybrid VM with 2995 base images |
 
-The 3001 build reuses the 2995 `osgi.jar` as compile-time interfaces, recorded in its manifest. Complete 3001 root/resource images and its original OSGi JAR were not supplied.
+All three original 3001 JARs were supplied by the user, with provenance recorded in the manifest. Its `osgi.jar` is byte-identical to the 2995 file and is used only for compile-time interfaces. Complete 3001 root/resource images have not been supplied.
 Each build checks its own original JAR digests; patches are not interchangeable.
 
 Mismatched firmware and existing helpers from another patch build are rejected. Other vehicles, regions and software versions have not been verified.

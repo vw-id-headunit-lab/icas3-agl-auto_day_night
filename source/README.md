@@ -13,7 +13,7 @@ source/
     inputs.json
     viewhandler.jar
     MIBHMI-STD-HCN1.1.153-bin.jar
-    osgi.jar  # 复用 2995 编译接口，来源见 inputs.json
+    osgi.jar
 ```
 
 `inputs.json` 是该版本的唯一配置：记录文件名、文件／class SHA-256、视图角色、日夜属性、字节码修改点及控件索引与尺寸。
@@ -26,6 +26,9 @@ python3 attach/build.py --version 2995 --jdk /path/to/jdk17 --output /tmp/daynig
 支持其它固件时，在 `source/<版本>/` 添加对应输入和清单，完成该版本的字节码／运行时适配与验证后，
 再把版本加入 `.github/workflows/build.yml` 的矩阵。仅添加文件或改文件名不代表已兼容。
 
+3001 的三个原厂 JAR 均由用户提供。`osgi.jar` 已核对与 2995 逐字节相同，仅用于编译接口，来源见 `3001/inputs.json`。
+混合虚拟机验证不等于完整 3001 系统或实车验证。
+
 这些 JAR 是固件输入，权利归原权利人；项目 MIT 许可证仅覆盖自编源码。
 
 Each firmware version has its own directory, currently `2995/` and `3001/`. `inputs.json` records the version,
@@ -36,5 +39,6 @@ To support another version, add `source/<version>/`, implement and verify its by
 then add it to the build workflow matrix. Adding files or renaming them alone does not establish compatibility.
 The firmware JARs retain their original rights; this project's MIT license covers authored code only.
 
-3001 uses the two supplied original HCN1.1.153 JARs and reuses the 2995 OSGi compile interfaces.
+All three original 3001 JARs were supplied by the user. Its `osgi.jar` is byte-identical to the 2995 file
+and is used only for compile-time interfaces; provenance is recorded in `3001/inputs.json`.
 Its hybrid-VM validation does not establish a complete 3001 system or vehicle validation.

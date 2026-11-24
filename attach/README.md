@@ -78,4 +78,4 @@ DAYNIGHT_TEST_JDK=/path/to/jdk17 python3 -m unittest discover -s attach/tests -v
 实车 Attach、真实灯光硬件和长期稳定性尚未验证；原厂权限限制可能使 Attach 失败。
 实现不会自动放宽权限、修改原固件或重启车机。详细 review 见 [代码 review](../docs/CODE_REVIEW.md)。
 
-实验版本 3001 使用 `--version 3001`。OSGi 编译接口复用 2995，完整 3001 系统和实车未验证；见 [3001 验证](../docs/3001_VALIDATION.md)。
+实验版本 3001 使用 `--version 3001`。三个原厂 JAR 均由用户提供，其中 `osgi.jar` 与 2995 逐字节相同，仅用于编译接口。完整 3001 系统和实车未验证；见 [3001 验证](../docs/3001_VALIDATION.md)。

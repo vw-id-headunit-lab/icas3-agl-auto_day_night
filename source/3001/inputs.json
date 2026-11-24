@@ -13,7 +13,7 @@
     "osgi_jar": {
       "path": "osgi.jar",
       "sha256": "69a64d1a1c4dd99b292f9d52af0bb25ad9d6d6b1260f6ce03f7fc7608b43844b",
-      "provenance": "Reused source/2995/osgi.jar as compile-only OSGi interfaces; no original 3001 osgi.jar was supplied."
+      "provenance": "Original 3001 osgi.jar supplied by the user; byte-identical to source/2995/osgi.jar. Used only as compile-time OSGi interfaces."
     }
   },
   "patch": {
