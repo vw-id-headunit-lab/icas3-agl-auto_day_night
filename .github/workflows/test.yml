@@ -3,24 +3,6 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: DAYNIGHT_VIEW_JAR=source/2995/viewhandler.jar python3 -m unittest discover -s native-auto-menu
-  go-source:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.x'
-      - run: go vet ./...
-        working-directory: menu
-      - run: go build -o "$RUNNER_TEMP/daynightlab" ./cmd/daynightlab
-        working-directory: menu
-      - run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o "$RUNNER_TEMP/daynight-update" safe-update/main.go
-      - run: sh -n safe-update/restore.sh
   attach:
     runs-on: ubuntu-latest
     steps:

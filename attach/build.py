@@ -1,4 +1,4 @@
-"""Build a local Java 8 Attach bundle from pinned, user-supplied firmware."""
+"""Build the single Attach executable directly from one version manifest."""
 import argparse
 import hashlib
 import json
@@ -9,14 +9,13 @@ import subprocess
 import tempfile
 import zipfile
 
+from patch_config import load_inputs, render_geometry_rules, fixed_edits, sha
+
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_SOURCES = ('DayNightAgent.java', 'PatchSession.java', 'UiExecutor.java', 'AgentRequest.java')
-HELPER_SOURCES = ('RuntimeViews.java', 'ViewNodes.java', 'GeometryRules.java')
-PREFIX = 'generated/de/vw/mib/appui/controlcenter/internal/view/'
-
-
-def sha(data):
-    return hashlib.sha256(data).hexdigest()
+HELPER_SOURCES = ('DayNightSelection.java', 'RuntimeViews.java', 'ViewNodes.java')
+ASM_EXPORTS = ('--add-exports', 'java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED',
+               '--add-exports', 'java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED')
 
 
 def write_jar(path, entries, manifest=None):
@@ -30,42 +29,11 @@ def write_jar(path, entries, manifest=None):
             output.writestr(info, content)
 
 
-def verify_inputs(args):
-    metadata = json.loads((ROOT/'firmware.json').read_text())
-    for path, key, label in (
-        (args.view_jar, 'viewhandler_original_sha256', 'viewhandler.jar'),
-        (args.hmi_jar, 'hmi_original_sha256', 'HMI JAR'),
-    ):
-        if sha(path.read_bytes()) != metadata[key]:
-            raise ValueError('Unsupported original '+label)
-
-
-def resolve_version_inputs(args):
-    version = getattr(args, 'version', None)
-    if version is None:
-        return
-    if not version.isascii() or not version.isdigit():
-        raise ValueError('Version must be an ASCII numeric directory name')
-    folder = ROOT/'source'/version
-    metadata = json.loads((folder/'inputs.json').read_text())
-    if metadata.get('firmware_version') != version:
-        raise ValueError('Input manifest version differs from selected version')
-    for key in ('view_jar', 'hmi_jar', 'osgi_jar'):
-        if getattr(args, key, None) is not None:
-            raise ValueError('Use --version or explicit JAR paths, not both')
-        entry = metadata['files'][key]
-        filename = entry['path']
-        if not filename or Path(filename).name != filename or filename in ('.', '..'):
-            raise ValueError('Input filename must stay inside its version directory')
-        path = folder/filename
-        if sha(path.read_bytes()) != entry['sha256']:
-            raise ValueError('Versioned input SHA-256 mismatch: '+filename)
-        setattr(args, key, path)
-
-
-def compile_java(java, destination, sources, classpath=None):
+def compile_java(java, destination, sources, classpath=None, exports=()):
     destination.mkdir()
-    command = [str(java/'javac'), '--release', '8', '-Xlint:-options', '-d', str(destination)]
+    command = [str(java/'javac'), *exports, '-d', str(destination)]
+    if not exports:
+        command += ['--release', '8', '-Xlint:-options']
     if classpath:
         command += ['-cp', classpath]
     subprocess.run(command + [str(source) for source in sources], check=True)
@@ -80,33 +48,60 @@ def class_entries(directory):
     return entries
 
 
-def patch_payload(view, candidate):
+def build_definitions(metadata, view, java, work):
+    """Patch only selected class files; never write a full replacement viewhandler JAR."""
+    spec = metadata['patch']
+    prefix = spec['class_prefix']
+    output = work/'definitions'
+    output.mkdir()
+    transformer = work/'transformer'
+    compile_java(java, transformer, [ROOT/'attach/tools/PatchViews.java'], exports=ASM_EXPORTS)
+    arguments = []
     entries, pins = {}, []
-    with zipfile.ZipFile(view) as original, zipfile.ZipFile(candidate) as patched:
-        changed = sorted(name for name in original.namelist() if original.read(name) != patched.read(name))
-        if len(changed) != 10 or any(not name.startswith(PREFIX) for name in changed):
-            raise ValueError('Unexpected patch scope')
-        for name in changed:
-            entries['patched/'+name] = patched.read(name)
-            pins.append(name.replace('/', '.').removesuffix('.class')+'='+sha(original.read(name)))
+    with zipfile.ZipFile(view) as original:
+        if len(original.namelist()) != len(set(original.namelist())):
+            raise ValueError('Duplicate original ZIP entries')
+        for target in spec['targets']:
+            name = prefix+target['name']+'.class'
+            data = fixed_edits(original.read(name), target)
+            pins.append(name.replace('/', '.').removesuffix('.class')+'='+target['sha256'])
+            path = output/(target['name']+'.class')
+            path.write_bytes(data)
+            if target['kind'] == 'layout':
+                entries['patched/'+name] = data
+            else:
+                arguments += [str(path), str(path), str(target['daynight_reads']),
+                              str(target.get('mode', -1)), str(spec['day_night_property']), prefix]
+    subprocess.run([str(java/'java'), *ASM_EXPORTS, '-cp', str(transformer), 'PatchViews', *arguments], check=True)
+    for target in spec['targets']:
+        name = prefix+target['name']+'.class'
+        data = (output/(target['name']+'.class')).read_bytes()
+        if data[:4] != b'\xca\xfe\xba\xbe' or int.from_bytes(data[6:8], 'big') != 52:
+            raise ValueError('Patched definition is not Java 8: '+name)
+        entries['patched/'+name] = data
     entries['pins.properties'] = ('\n'.join(pins)+'\n').encode()
     return entries
 
 
-def build_jars(args, work, candidate):
-    java = args.jdk.resolve()/'bin'
-    helper_classes, agent_classes = work/'helpers', work/'agent'
-    classpath = os.pathsep.join([str(args.hmi_jar.resolve()), str(args.osgi_jar.resolve())])
+def build_jars(metadata, paths, jdk, work):
+    java = jdk.resolve()/'bin'
+    spec = metadata['patch']
+    definitions = build_definitions(metadata, paths['view_jar'], java, work)
+    geometry = work/'GeometryRules.java'
+    geometry.write_text(render_geometry_rules(spec))
+    helper_classes = work/'helpers'
     compile_java(java, helper_classes,
-                 [ROOT/'menu/java'/PREFIX/'DayNightSelection.java',
-                  *[ROOT/'attach/java'/name for name in HELPER_SOURCES]], classpath)
+                 [*[ROOT/'attach/java'/name for name in HELPER_SOURCES], geometry],
+                 os.pathsep.join([str(paths['hmi_jar']), str(paths['osgi_jar'])]))
     helper = class_entries(helper_classes)
     write_jar(work/'daynight-helpers.jar', helper)
-    identity = b''.join((ROOT/'attach/java'/name).read_bytes() for name in AGENT_SOURCES + HELPER_SOURCES)
-    identity += (ROOT/'menu/java'/PREFIX/'DayNightSelection.java').read_bytes()
-    identity += candidate.read_bytes()
-    identity += b''.join(helper[name] for name in sorted(helper))
-    package = 'lab.daynight.attach.v' + sha(identity)[:12]
+    identity = hashlib.sha256()
+    for name in AGENT_SOURCES + HELPER_SOURCES:
+        identity.update((ROOT/'attach/java'/name).read_bytes())
+    identity.update(json.dumps(metadata, sort_keys=True).encode())
+    for name, data in sorted({**definitions, **helper}.items()):
+        identity.update(name.encode()); identity.update(data)
+    package = 'lab.daynight.attach.v'+identity.hexdigest()[:12]
     generated = work/'agent-sources'
     generated.mkdir()
     sources = []
@@ -115,26 +110,29 @@ def build_jars(args, work, candidate):
         target.write_text((ROOT/'attach/java'/name).read_text().replace(
             'package lab.daynight.attach;', 'package '+package+';'))
         sources.append(target)
+    agent_classes = work/'agent'
     compile_java(java, agent_classes, sources)
     agent = class_entries(agent_classes)
-    agent.update(patch_payload(args.view_jar, candidate))
+    agent.update(definitions)
     agent['bundle.properties'] = ('helpers.sha256='+sha((work/'daynight-helpers.jar').read_bytes())+'\n').encode()
+    agent['firmware.properties'] = (
+        'view.sha256='+metadata['files']['view_jar']['sha256']+'\n'
+        'hmi.sha256='+metadata['files']['hmi_jar']['sha256']+'\n'
+        'helper.prefix='+spec['class_prefix'].replace('/', '.')+'\n'
+        'target.count='+str(len(spec['targets']))+'\n').encode()
     write_jar(work/'daynight-agent.jar', agent,
               'Manifest-Version: 1.0\r\nAgent-Class: '+package+'.DayNightAgent\r\n'
               'Can-Redefine-Classes: true\r\nCan-Retransform-Classes: true\r\n\r\n')
 
 
-def publish(work, output):
-    # Atomic directory creation prevents a concurrent build from replacing any existing output.
+def publish(work, output, version=None):
     output.mkdir(mode=0o700)
     try:
-        records = {}
-        for name in ('daynight-patch',):
-            shutil.copy2(work/name, output/name)
-            (output/name).chmod(0o700)
-            records[name] = sha((output/name).read_bytes())
+        shutil.copy2(work/'daynight-patch', output/'daynight-patch')
+        (output/'daynight-patch').chmod(0o700)
+        records = {'daynight-patch': sha((output/'daynight-patch').read_bytes())}
         (output/'build.json').write_text(json.dumps({
-            'mode': 'runtime-attach', 'changed_classes': 10,
+            'mode': 'runtime-attach', 'firmware_version': version,
             'firmware_modified': False, 'vm_verified': False, 'files': records,
         }, indent=2)+'\n')
         return records
@@ -147,17 +145,10 @@ def build(args):
     output = args.output.absolute()
     if output.exists() or output.is_symlink():
         raise FileExistsError('Output must be a new directory')
-    resolve_version_inputs(args)
-    verify_inputs(args)
+    metadata, paths = load_inputs(args.version, ROOT)
     with tempfile.TemporaryDirectory(prefix='daynight-attach-') as temporary:
         work = Path(temporary)
-        subprocess.run([
-            'go', 'run', './cmd/daynightlab', '--sources', '.', '--jdk', str(args.jdk.resolve()),
-            '--view-jar', str(args.view_jar.resolve()), '--hmi-jar', str(args.hmi_jar.resolve()),
-            '--output', str(work/'menu'),
-        ], cwd=ROOT/'menu', check=True)
-        build_jars(args, work, work/'menu/viewhandler.candidate.jar')
-        # Embed private generated classes only in the temporary build checkout.
+        build_jars(metadata, paths, args.jdk, work)
         launcher = work/'launcher'
         shutil.copytree(ROOT/'attach/cmd', launcher/'cmd')
         shutil.copy2(ROOT/'attach/go.mod', launcher/'go.mod')
@@ -167,18 +158,12 @@ def build(args):
         subprocess.run([
             'go', 'build', '-trimpath', '-o', str(work/'daynight-patch'), './cmd/daynight-attach',
         ], cwd=launcher, env=dict(os.environ, GOOS='linux', GOARCH='arm64', CGO_ENABLED='0'), check=True)
-        print(json.dumps(publish(work, output), indent=2))
+        print(json.dumps(publish(work, output, args.version), indent=2))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jdk', required=True, type=Path)
-    parser.add_argument('--version', help='Read inputs from source/<version>/inputs.json')
-    parser.add_argument('--view-jar', type=Path)
-    parser.add_argument('--hmi-jar', type=Path)
-    parser.add_argument('--osgi-jar', type=Path)
+    parser.add_argument('--version', required=True, help='Read source/<version>/inputs.json')
     parser.add_argument('--output', required=True, type=Path)
-    args = parser.parse_args()
-    if not args.version and not all((args.view_jar, args.hmi_jar, args.osgi_jar)):
-        parser.error('Supply --version or all three JAR input paths')
-    build(args)
+    build(parser.parse_args())

@@ -14,9 +14,7 @@ import java.util.jar.*;
 
 /** Java 8 agent: memory-only, pinned view definitions, explicit removal. */
 public final class DayNightAgent {
-    private static final String PREFIX = "generated.de.vw.mib.appui.controlcenter.internal.view.";
-    private static final String VIEW_SHA = "9bd5764fabe2cf79e5193f2dd39c38954f6170a8f016c229c133e2b8165a1ce1";
-    private static final String HMI_SHA = "c27e37f93b9877c023487af8566e5cb33b9475835fcee6fe1b68f6c8affc7e17";
+    private static String helperPrefix;
     private static final Map<Class<?>, byte[]> originals = new LinkedHashMap<Class<?>, byte[]>();
     private static Instrumentation instrumentation;
     private static ClassLoader viewLoader;
@@ -53,7 +51,7 @@ public final class DayNightAgent {
         try (InputStream in = resource("pins.properties")) { pins.load(in); }
         List<String> names = new ArrayList<String>(pins.stringPropertyNames());
         Collections.sort(names);
-        if (names.size() != 10) throw new SecurityException("Expected exactly ten target views");
+        if (names.isEmpty()) throw new SecurityException("Empty patch target set");
         Class<?> root = null;
         for (Class<?> type : instrumentation.getAllLoadedClasses()) {
             if (names.contains(type.getName())) {
@@ -63,11 +61,16 @@ public final class DayNightAgent {
             }
         }
         if (root == null) throw new IllegalStateException("Open the original control center before attaching");
+        Properties firmware = new Properties();
+        try (InputStream in = resource("firmware.properties")) { firmware.load(in); }
+        if (names.size() != Integer.parseInt(firmware.getProperty("target.count")))
+            throw new SecurityException("Target count differs from selected version");
+        helperPrefix = firmware.getProperty("helper.prefix");
         viewLoader = root.getClassLoader();
         URL viewSource = classLocation(root);
-        verifyFile(viewSource, VIEW_SHA);
+        verifyFile(viewSource, firmware.getProperty("view.sha256"));
         Class<?> hmi = Class.forName("de.vw.mib.MIBMain", false, viewLoader);
-        verifyFile(classLocation(hmi), HMI_SHA);
+        verifyFile(classLocation(hmi), firmware.getProperty("hmi.sha256"));
         final List<Class<?>> targets = new ArrayList<Class<?>>();
         for (String name : names) {
             Class<?> type = Class.forName(name, false, viewLoader);
@@ -87,7 +90,7 @@ public final class DayNightAgent {
         instrumentation.addTransformer(capture, true);
         try { instrumentation.retransformClasses(targets.toArray(new Class<?>[0])); }
         finally { instrumentation.removeTransformer(capture); }
-        if (captured.size() != 10) throw new IllegalStateException("Could not capture every live target");
+        if (captured.size() != targets.size()) throw new IllegalStateException("Could not capture every live target");
         loadHelpers();
         List<ClassDefinition> definitions = new ArrayList<ClassDefinition>();
         for (Class<?> type : targets)
@@ -100,7 +103,7 @@ public final class DayNightAgent {
                     session.install(changes(definitions));
                 }
             });
-            System.out.println("DAYNIGHT_ATTACH installed classes=10 liveNodes=" + lastRefreshCount);
+            System.out.println("DAYNIGHT_ATTACH installed classes=" + targets.size() + " liveNodes=" + lastRefreshCount);
         } finally { if (session.original()) originals.clear(); }
     }
 
@@ -138,7 +141,7 @@ public final class DayNightAgent {
         try (InputStream in = resource("bundle.properties")) { meta.load(in); }
         if (!sha(Files.readAllBytes(helper)).equals(meta.getProperty("helpers.sha256")))
             throw new SecurityException("Helper JAR hash mismatch");
-        try { Class.forName(PREFIX + "DayNightSelection", false, viewLoader);
+        try { Class.forName(helperPrefix + "DayNightSelection", false, viewLoader);
             if (runtimeViews == null) throw new SecurityException("A different day/night helper is already loaded");
         } catch (ClassNotFoundException missing) {
             if (viewLoader == null) {
@@ -158,7 +161,7 @@ public final class DayNightAgent {
                 }
             }
         }
-        runtimeViews = Class.forName(PREFIX + "RuntimeViews", true, viewLoader);
+        runtimeViews = Class.forName(helperPrefix + "RuntimeViews", true, viewLoader);
     }
 
     private static int refresh(boolean apply) throws Exception {

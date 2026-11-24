@@ -42,7 +42,8 @@ chmod +x ./daynight-patch
 ## 在开发机构建
 
 需要 Python 3.11+、Go 1.23+、JDK 17+ ，构建输入位于 `source/2995/`。
-源码与输入只保留在开发机，构建完成后输出补丁和本地摘要文件：
+源码位于 `attach/`，版本输入与所有修改规则位于 `source/2995/inputs.json`。
+唯一构建入口直接生成 class 定义，菜单只编译一次；构建完成输出补丁和摘要文件：
 
 ```sh
 python3 attach/build.py \

@@ -80,8 +80,10 @@ class StaleCallbackTests(unittest.TestCase):
             path.write_text('package '+relative.rsplit('/', 1)[0].replace('/', '.')+';\n'+body)
             sources.append(str(path))
         (cls.root/'StaleHarness.java').write_text(HARNESS)
+        geometry=cls.root/'GeometryRules.java'
+        geometry.write_text('package '+PREFIX.rstrip('/').replace('/','.')+'; class GeometryRules {static final int DAY_NIGHT_PROPERTY=2000000029;}')
         subprocess.run([str(cls.java/'javac'), '--release', '8', '-d', str(cls.root), *sources,
-                        str(ROOT/'menu/java'/PREFIX/'DayNightSelection.java'), str(cls.root/'StaleHarness.java')],
+                        str(ROOT/'attach/java/DayNightSelection.java'), str(geometry), str(cls.root/'StaleHarness.java')],
                        check=True, capture_output=True)
 
     @classmethod

@@ -8,24 +8,22 @@ import de.vw.mib.view.internal.tree.CloneData;
 
 /** Bounded discovery, separate from mutations; reject incomplete layout snapshots. */
 final class ViewNodes {
-    private static final String PREFIX = "generated.de.vw.mib.appui.controlcenter.internal.view.";
+    private static final String PREFIX = GeometryRules.CLASS_PREFIX;
     private final IdentityHashMap<Object, Boolean> seen = new IdentityHashMap<Object, Boolean>();
     private final List<AbstractNodeController> nodes = new ArrayList<AbstractNodeController>();
 
     static List<AbstractNodeController> collect(Object desktop) throws Exception {
         ViewNodes tree = new ViewNodes();
         tree.walk(desktop, 0);
-        for (String layout : Arrays.asList("Sc__", "Scm__")) {
+        for (String[] layout : GeometryRules.layouts()) {
+            Set<String> expected = new HashSet<String>(Arrays.asList(layout));
             Set<String> found = new HashSet<String>();
             for (AbstractNodeController node : tree.nodes) {
                 String name = node.getClass().getSimpleName();
-                if (name.startsWith(layout)) found.add(name);
+                if (expected.contains(name)) found.add(name);
             }
-            if (found.isEmpty()) continue;
-            Set<String> expected = new HashSet<String>();
-            for (int id : layout.equals("Sc__") ? new int[]{0,1,3,4,5} : new int[]{0,1,7,8,9})
-                expected.add(layout + id);
-            if (!found.equals(expected)) throw new IllegalStateException("Incomplete control-center layout: " + found);
+            if (!found.isEmpty() && !found.equals(expected))
+                throw new IllegalStateException("Incomplete control-center layout: " + found);
         }
         if (tree.nodes.isEmpty()) throw new IllegalStateException("Open the original control center and retry");
         return tree.nodes;

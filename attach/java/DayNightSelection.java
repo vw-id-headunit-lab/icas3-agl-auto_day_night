@@ -12,7 +12,7 @@ import java.util.WeakHashMap;
 public final class DayNightSelection implements OutEventListener,Runnable {
  private static final java.util.concurrent.atomic.AtomicInteger logCount=new java.util.concurrent.atomic.AtomicInteger();
  private static void trace(String text){if(logCount.getAndIncrement()<150)System.out.println("DAYNIGHT_MENU "+Thread.currentThread().getName()+" "+text);}
- private static final int PROPERTY=2000000029;
+ private static final int PROPERTY=GeometryRules.DAY_NIGHT_PROPERTY;
  private static final Map<WidgetController,DayNightSelection> listeners=new WeakHashMap<>();
  private static final Map<Object,Method> views=new WeakHashMap<>();
  private static int saved=-1;

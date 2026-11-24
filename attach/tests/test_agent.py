@@ -8,7 +8,8 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
-from types import SimpleNamespace
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,10 +92,9 @@ class BuilderBoundaryTests(unittest.TestCase):
 
     def test_versioned_inputs_check_every_digest(self):
         module=self.load_builder()
-        args=SimpleNamespace(version='2995',view_jar=None,hmi_jar=None,osgi_jar=None)
-        module.resolve_version_inputs(args)
-        self.assertEqual(args.view_jar,ROOT/'source/2995/viewhandler.jar')
-        self.assertTrue(args.hmi_jar.is_file())
+        metadata,paths=module.load_inputs('2995',ROOT)
+        self.assertEqual(paths['view_jar'],ROOT/'source/2995/viewhandler.jar')
+        self.assertTrue(paths['hmi_jar'].is_file())
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);folder=root/'source/2995';folder.mkdir(parents=True)
             manifest=json.loads((ROOT/'source/2995/inputs.json').read_text())
@@ -103,13 +103,13 @@ class BuilderBoundaryTests(unittest.TestCase):
                 (folder/entry['path']).write_bytes(b'wrong input')
             with patch.object(module,'ROOT',root):
                 with self.assertRaisesRegex(ValueError,'SHA-256 mismatch'):
-                    module.resolve_version_inputs(SimpleNamespace(version='2995',view_jar=None,hmi_jar=None,osgi_jar=None))
+                    module.load_inputs('2995',root)
 
     def test_version_directory_traversal_rejected(self):
         module=self.load_builder()
         for version in ('../2995','2995/other','２９９５'):
             with self.assertRaises(ValueError):
-                module.resolve_version_inputs(SimpleNamespace(version=version))
+                module.load_inputs(version,ROOT)
 
     def test_failed_publication_removes_only_its_new_directory(self):
         module=self.load_builder()
@@ -128,9 +128,8 @@ class BuilderBoundaryTests(unittest.TestCase):
             base=Path(tmp);(base/'unknown.jar').write_bytes(b'not firmware')
             class Args:
                 output=base/'out'
-                view_jar=base/'unknown.jar'
-                hmi_jar=base/'unknown.jar'
-            with self.assertRaisesRegex(ValueError,'Unsupported original'):
+                version='../unknown'
+            with self.assertRaises(ValueError):
                 module.build(Args())
             self.assertFalse(Args.output.exists())
 

@@ -11,7 +11,8 @@ source/
     osgi.jar
 ```
 
-`inputs.json` 记录版本、文件名和 SHA-256。构建器在编译前核对三个文件的摘要，拒绝不匹配的输入。
+`inputs.json` 是该版本的唯一配置：记录文件名、文件／class SHA-256、视图角色、日夜属性、字节码修改点及控件索引与尺寸。
+构建器校验输入后直接生成目标 class 定义；运行时校验资源和几何规则也从这份清单生成。
 
 ```sh
 python3 attach/build.py --version 2995 --jdk /path/to/jdk17 --output /tmp/daynight-2995
@@ -23,7 +24,8 @@ python3 attach/build.py --version 2995 --jdk /path/to/jdk17 --output /tmp/daynig
 这些 JAR 是固件输入，权利归原权利人；项目 MIT 许可证仅覆盖自编源码。
 
 Each firmware version has its own directory, currently `2995/`. `inputs.json` records the version,
-filenames and SHA-256 digests; all three inputs are verified before compilation.
+filenames, file/class digests, view roles, bytecode edits and live widget geometry. It is the single
+configuration used to validate inputs, patch selected definitions and generate runtime checks/rules.
 
 To support another version, add `source/<version>/`, implement and verify its bytecode/runtime adaptation,
 then add it to the build workflow matrix. Adding files or renaming them alone does not establish compatibility.

@@ -78,7 +78,7 @@ chmod +x ./daynight-patch
 
 ### 从源码构建（开发机）
 
-从仓库根目录执行，输出目录必须不存在：
+从仓库根目录执行，输出目录必须不存在。唯一构建链直接生成内存 class 补丁，菜单适配器只编译一次：
 
 ```sh
 python3 attach/build.py \
@@ -113,7 +113,7 @@ python3 attach/build.py \
 - AUTO 可切回相同外观的手动日间或夜间模式。
 - 卸载恢复、再次加载和重复加载正常，JVM PID 与启动时间保持不变。
 - 原 `viewhandler.jar` SHA-256 保持不变。
-- 24 项自动化测试通过，Go race 检查、vet 和 Linux ARM64 构建通过。
+- 27 项自动化测试通过，Go race 检查、vet 和 Linux ARM64 构建通过。
 
 实车 Attach、真实灯光硬件、长期稳定性和跨重启保存尚未验证。虚拟机结果不代表实车验收。
 修复与验证详情见 [代码 review 与重构](docs/CODE_REVIEW.md)。
@@ -123,10 +123,9 @@ python3 attach/build.py \
 | 路径 | 用途 |
 | --- | --- |
 | `attach/` | Agent、Attach 客户端、构建器及回归测试 |
-| `menu/` | 菜单适配器与视图补丁构建逻辑 |
 | `docs/` | 实现、review 与验证说明 |
 | `source/2995/` | 当前固件的构建输入与摘要清单 |
-| `firmware.json` | 已核对的固件输入摘要与验证元数据 |
+| `source/2995/inputs.json` | 文件与 class 摘要、字节码修改点及运行时控件规则 |
 
 ### 许可证
 
@@ -208,7 +207,7 @@ Mismatched firmware and existing helpers from another patch build are rejected. 
 
 ### Build from source (development machine)
 
-Run from the repository root. The output directory must not already exist:
+Run from the repository root. The output directory must not already exist. One build pipeline generates in-memory class definitions directly and compiles the menu adapter once:
 
 ```sh
 python3 attach/build.py \
@@ -243,7 +242,7 @@ Verified on 2026-11-24 in QEMU AGL with the factory Zulu 8.48.51.251 ARM64 JVM:
 - Auto can switch to manual Day or Night even when the effective theme already matches.
 - Removal, reinstallation and repeated installation work with unchanged JVM PID and start time.
 - The original `viewhandler.jar` SHA-256 remains unchanged.
-- All 24 automated tests pass, along with Go race checks, vet and Linux ARM64 builds.
+- All 27 automated tests pass, along with Go race checks, vet and Linux ARM64 builds.
 
 Real-vehicle Attach, physical lighting hardware, long-term stability and persistence across reboots have not been verified. VM results do not establish vehicle validation.
 See the [code review and refactoring record](docs/CODE_REVIEW.md) for fixes and verification details.
@@ -253,10 +252,9 @@ See the [code review and refactoring record](docs/CODE_REVIEW.md) for fixes and 
 | Path | Purpose |
 | --- | --- |
 | `attach/` | Agent, Attach client, builder and regression tests |
-| `menu/` | Menu adapter and view patch build logic |
 | `docs/` | Implementation, review and verification notes |
 | `source/2995/` | Current firmware build inputs and digest manifest |
-| `firmware.json` | Verified firmware input digests and validation metadata |
+| `source/2995/inputs.json` | File/class digests, bytecode edits and live widget rules |
 
 ### License
 

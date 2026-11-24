@@ -9,7 +9,7 @@ import org.osgi.framework.*;
 
 /** All widget reads and changes run on the original UI dispatcher. */
 public final class RuntimeViews {
-    private static final int DAY_NIGHT_PROPERTY = 2000000029;
+    private static final int DAY_NIGHT_PROPERTY = GeometryRules.DAY_NIGHT_PROPERTY;
     private static final Map<WidgetModel, Integer> heights = new WeakHashMap<WidgetModel, Integer>();
     private static final Map<WidgetModel, Boolean> visibility = new WeakHashMap<WidgetModel, Boolean>();
 
@@ -32,7 +32,7 @@ public final class RuntimeViews {
             validateGeometry(nodes);
             if (!apply) DayNightSelection.shutdown();
             for (AbstractNodeController node : nodes) {
-                if (node.getClass().getSimpleName().endsWith("__0")) resize(node, apply);
+                if (GeometryRules.mode(node.getClass().getSimpleName()) == -1) resize(node, apply);
                 else refreshSelection(node, apply);
             }
             System.out.println("DAYNIGHT_ATTACH UI refresh apply=" + apply + " nodes=" + nodes.size());
@@ -43,7 +43,7 @@ public final class RuntimeViews {
     private static void validateGeometry(List<AbstractNodeController> nodes) {
         for (AbstractNodeController node : nodes) {
             String name = node.getClass().getSimpleName();
-            if (!name.endsWith("__0")) continue;
+            if (GeometryRules.mode(name) != -1) continue;
             CloneData master = node.getCloneMaster();
             Set<String> matched = new HashSet<String>();
             for (int i = 0; i < master.widgetCount(); i++) {
@@ -52,10 +52,10 @@ public final class RuntimeViews {
                 if (original < 0) continue;
                 if (!matched.add(widget.get_name())) throw new IllegalStateException("Duplicate dropdown widget");
                 int current = widget.get_height();
-                if (current != original && current != original + 120)
+                if (current != original && current != GeometryRules.patchedHeight(name, i, widget.get_name()))
                     throw new IllegalStateException("Unexpected geometry: " + widget.get_name() + "=" + current);
             }
-            if (matched.size() != 3) throw new IllegalStateException("Expected three pinned dropdown widgets: " + matched);
+            if (matched.size() != GeometryRules.widgetCount(name)) throw new IllegalStateException("Incomplete pinned dropdown: " + matched);
         }
     }
 
@@ -67,7 +67,7 @@ public final class RuntimeViews {
             if (original < 0) continue;
             if (apply) {
                 if (!heights.containsKey(widget)) heights.put(widget, widget.get_height());
-                widget.set_height(original + 120);
+                widget.set_height(GeometryRules.patchedHeight(node.getClass().getSimpleName(), i, widget.get_name()));
             } else {
                 widget.set_height(heights.containsKey(widget) ? heights.remove(widget) : original);
             }
@@ -78,9 +78,8 @@ public final class RuntimeViews {
     private static void refreshSelection(AbstractNodeController node, boolean apply) throws Exception {
         String name = node.getClass().getSimpleName();
         if (apply) DayNightSelection.observe(node);
-        if (!name.endsWith("__1")) {
-            int mode = (name.equals("Sc__3") || name.equals("Scm__7")) ? 0
-                : (name.equals("Sc__4") || name.equals("Scm__8")) ? 1 : 2;
+        int mode = GeometryRules.mode(name);
+        if (mode >= 0) {
             for (CloneData clone : node.getCloneMaster()) {
                 WidgetModel row = clone.widget(0);
                 if (apply) DayNightSelection.bind(null, row.getController(), mode);

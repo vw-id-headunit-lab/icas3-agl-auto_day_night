@@ -4,6 +4,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import json
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from patch_config import render_geometry_rules
 
 ROOT = Path(__file__).resolve().parents[2]
 JDK = os.environ.get('DAYNIGHT_TEST_JDK')
@@ -16,9 +20,11 @@ class ReviewRegressionTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory(prefix='daynight-review-test-')
         cls.root = Path(cls.temp.name)
         cls.java = Path(JDK)/'bin'
-        sources = ['PatchSession.java', 'UiExecutor.java', 'AgentRequest.java', 'GeometryRules.java']
+        sources = ['PatchSession.java', 'UiExecutor.java', 'AgentRequest.java']
+        geometry=cls.root/'GeometryRules.java'
+        geometry.write_text(render_geometry_rules(json.loads((ROOT/'source/2995/inputs.json').read_text())['patch']))
         subprocess.run([str(cls.java/'javac'), '--release', '8', '-d', str(cls.root),
-                        *[str(ROOT/'attach/java'/name) for name in sources],
+                        *[str(ROOT/'attach/java'/name) for name in sources], str(geometry),
                         str(ROOT/'attach/tests/java/ReviewHarness.java'),
                         str(ROOT/'attach/tests/java/GeometryHarness.java')], check=True, capture_output=True)
 

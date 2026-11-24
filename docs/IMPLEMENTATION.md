@@ -1,65 +1,51 @@
-# 实现与验证记录
+# 实现结构
 
-## 运行时 Attach（2026-11-24）
+项目只有一条 Attach 构建链和一个车机入口。车机执行 `daynight-patch`，开发机执行
+`python3 attach/build.py --version 2995 --jdk ... --output ...`。
 
-部署入口现为单个 `daynight-patch`，内置 Agent/helper，自动识别 HMI。临时 JAR 与结果均位于目标 JVM 的 `/tmp`，操作完成读取后清理；无需传入报告参数。
+## 单一版本配置
 
-新增 `attach/`：通过 HotSpot 本地 Attach 协议调用 Java 8 `agentmain`，在原 UI dispatcher 中
-以 Instrumentation 一次性重定义十个现有视图类。构建时保留 Java 8 目标格式与原类结构，
-运行时核对原 JAR 和目标 class 摘要，捕获真实内存定义用于卸载。没有替换磁盘 JAR、停止 HMI
-或增加启动 Agent 参数。原厂 JRE 已存在的 `libinstrument.so` 由 Attach 按需加载。
+`source/<版本>/inputs.json` 同时提供：
 
-已有视图也会生效：通过原 DesktopManager 查找 control center 的现存节点，在 UI 线程调整
-三个下拉框高度、显示 AUTO 行、补挂读取／点击监听。未来创建的视图由重定义后的生命周期方法接入。
-卸载恢复原类定义、现存控件尺寸和可见性，并停止补丁定时器、移除补丁监听器。
-helper class 和已加载 native 库不会从 JVM 中卸载，但恢复后的视图不再调用它们。
+- 三个构建输入 JAR 的文件名和 SHA-256。
+- 目标视图类的名称、摘要、角色和布局分组。
+- AUTO 可见性的字节位置及预期指令。
+- 三个下拉控件的固定索引、名称、原尺寸、目标尺寸和字节码位置。
+- 日夜属性编号、属性读取次数和行对应的模式值。
 
-在原厂 ARM64 JVM 的 QEMU AGL 中已验证：两行菜单动态变为三行、AUTO 选中、
-同主题手动切换、原 DSI 模拟日夜设计信号驱动主题、卸载回两行及重复加载。
-用 JVM PID、`/proc/PID/stat` 启动 tick 和 RuntimeMXBean start time 核对同一进程，
-磁盘 `viewhandler.jar` 保持原摘要。没有实车 Attach 验证，也没有自动重新加载或自启安装。
+构建时验证该清单，生成 Agent 的校验资源和 `GeometryRules`。字节码修改与已创建控件的
+运行时修改读取同一份配置。增加版本需要对应清单和适配验证，不靠改目录名推断兼容。
 
-下面的实车记录与完整重启要求保留为旧版文件安装历史；不作为新 Attach 版本的实车结果。
+## 构建流程
 
-## 当前菜单与状态
+1. 校验所选版本的三个 JAR 和目标 class 摘要。
+2. 从原 JAR 只提取目标 class，在内存／临时目录执行可见性、几何与 ASM 视图方法修改。
+3. 编译一次菜单适配器与运行时 helper；生成几何规则并一起编译为 Java 8。
+4. 编译 Agent，打包目标定义、原 class 摘要、固件摘要和 helper 摘要。
+5. 用 Go 交叉编译 Linux ARM64 客户端，将两个临时 JAR 嵌入单文件补丁。
+6. 输出 `daynight-patch` 与 `build.json`，删除构建临时目录。
 
-原厂存在日间 0、夜间 1、AUTO 2 三种保存模式，但控制中心使用的日夜属性可能发布实际主题 0／1。用实际主题直接渲染菜单，会把 AUTO 显示成日间或夜间。原厂控制中心适配器还会把点击的模式与实际主题缓存比较；若相同就跳过原厂设置请求，导致 AUTO→当前同主题手动模式没有退出 AUTO。
+不会生成完整候选 viewhandler JAR，不会重复编译菜单适配器，也不回写原固件。
+Python 负责唯一构建编排，JDK 负责 class 编译／修改，Go 只负责车机可执行入口。
 
-当前方案只修改 viewhandler 中的菜单视图，不改主 JAR 中的原厂业务实现：
+## 运行时加载和回退
 
-- 两套控制中心布局恢复 AUTO 根条目可见性。
-- 两个根布局中限定的六个几何常量调整下拉框／背景及内部可视区，保持行高，让三项可见。
-- 八个菜单视图的日夜属性读取改为通过 `DayNightSelection` 投影保存模式；其它属性读取沿用原接口。
-- 视图注册／注销关联生命周期，六个条目关联原 `buttonReleased` 事件，保留原点击映射。
-- 使用原 ASL 线程切换接口发起异步 `getDayNightMode`，结果通过 widgets 的原 UI Invoker 回到 UI 线程更新显示。绘制路径不调用同步持久化服务。
-- 点击后最多六次、每次间隔 200ms 的有限读回。只有明确点击对应的保存值仍不同于选择值时，最多补发一次原厂 `setDayNightMode`，随后读回。不是无限轮询；普通读操作不设置模式。
-- 请求合并、序号、视图 epoch 与最新点击标识用于忽略过期结果及失效点击；单次请求两秒过期后允许重新发起读取。所有视图退出时停止定时器并失效旧请求。
-- 不直接写实际主题或全局数据池，不创建后台线程、网络服务或常驻控制进程。
+客户端定位唯一的 HMI JVM，在目标 `/tmp` 释放内嵌文件，通过 HotSpot Attach 加载
+`agentmain`。Agent 根据内嵌的版本配置校验原 JAR、原 class 与 class loader，捕获内存定义，
+再在原 UI dispatcher 中一次性重定义目标类并刷新现存控件。
 
-运行时共增加四个自编 class（主适配器及三个 API 回调）。这些位于目标 viewhandler 内部，不是增加到 bootclasspath 的外部桥接 JAR。
+`PatchSession` 区分 ORIGINAL、INSTALLING、INSTALLED、RESTORING、RECOVERY_REQUIRED。
+回退失败时保留原定义供 remove 重试，拒绝重复 install 伪装成功。未开始的 UI 请求可取消；
+已开始的修改等待结果后再返回。
 
-## 构建与范围检查
+卸载恢复原类、控件几何和监听器，用户当前模式保持不变。helper 类与原生 Attach 库可能保留
+到 JVM 退出。默认报告和临时 JAR 在读取结果后清理，锁文件留在 `/tmp` 供串行操作复用。
 
-`menu/cmd/daynightlab` 为本机离线 Go 构建器。核对整个原始 viewhandler 和主 JAR 的摘要，钉住八个视图 class 及两个几何 class 的摘要；使用 JDK17 编译 Java8 目标适配器及 ASM 修改器。最终核对 ZIP CRC、条目数量、辅助 class 白名单及限定修改范围，原输入不变，输出必须为新目录。
+## 菜单状态
 
-生成的 `build.json` 中 `ui_validated=false`、`vehicle_installed=false` 表示**构建器自身没有进行这些验证**。不要把它自动修改成“通过”。独立实车验证记录见 `firmware.json` 和 README；构建成功不等于 UI 或实车通过。
+唯一菜单实现为 `attach/java/DayNightSelection.java`。保存模式通过原 ASL API 异步读取，
+结果回到 UI 线程；绘制函数不等待同步持久化。明确点击后有限次读回，必要时最多补发一次
+原厂设置请求，修复 AUTO 与实际主题相同时切不回手动的问题。
 
-`native-auto-menu` 为历史两个可见性字节的独立构建器。其测试结果不代替当前 Java 异步适配器的功能验证。CI 无厂商输入，不能检查真实固件 UI。
-
-## 实车记录
-
-- 2026-11-22：用户确认原厂 AUTO 入口出现、大灯变化能切换主题；后续确认三行菜单可用。
-- 2026-11-23：本轮候选经过用户本机虚拟 HMI 点击反馈后，在用户明确停车 P 挡授权下部署。安装前备份摘要 `9113535ba604511c41229bf00201ab4840126966f2fa8f09668f25a564d42c85`。
-- 先 runtime-mask 并停止 HMI，确认 inactive/dead、MainPID=0、Readers 为空，再执行离线 apply。工具验证摘要、原 inode、owner、mode 和 `security.SMACK64=hmi::sub`；主 JAR、bundles 和启动脚本摘要未变。
-- 本轮候选摘要 `283ed23a372531d1d2274d459e14b096474dbb717f4a618791bb38148c396460`。部署后没有自动启动 HMI或发送重启；用户手动完整重启后反馈“实车验证没问题”。
-- 不据此声称所有时序、其它车型或长时间运行都通过。AUTO 跨另一次完整重启、极端快速点击、不同天气、导航／CarPlay／仪表联动未逐项确认。
-
-## 已复现的历史故障与约束
-
-1. **在线覆盖打开的 JAR。** 在主机及对应厂商 ARM64 JVM 复现旧 ZipFile／JarFile 继续持有原 inode 后内容被覆盖，后续条目读取失败。因此先停 HMI、确认无读者，再写入；备份回退也不能在线覆盖。
-2. **原标签丢失。** 实车 `cp -a` 未可靠保留 SMACK，不能据此认为权限完整。当前工具在离线状态保留原 inode，写后验证标签；不改变全局策略。
-3. **外部桥接 JAR。** 向 `/vw/hmi/lib` 增加 JAR 改变启动类路径，与共享归档不匹配；复现 `shared class paths mismatch`，JVM 初始化失败。当前方案保持这些路径及缓存不变。
-4. **缓存与主 JAR。** 主机修改主 JAR 的方法测试通过不意味着原厂预加载缓存会使用修改后的方法。当前方案不靠修改主 JAR 绕过此问题。
-5. **原厂失败处理。** 服务包含 watchdog 和 reboot-immediate；持续启动故障可能形成重启循环。不能把未经验证的修改直接接入自启，也不能把本次已验证理解成无风险。
-
-这些约束已纳入 [部署与回退流程](DEPLOYMENT.md)。此前失败版本不作为当前可安装候选发布。
+epoch、请求序号和点击标识用于拒绝过期结果；卸载或新请求后，旧回调不再设置模式。
+AUTO 的实际主题继续由原厂日夜输入驱动，适配器没有天气、定位或时间策略。

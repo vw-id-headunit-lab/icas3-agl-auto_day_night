@@ -14,5 +14,141 @@
       "path": "osgi.jar",
       "sha256": "69a64d1a1c4dd99b292f9d52af0bb25ad9d6d6b1260f6ce03f7fc7608b43844b"
     }
+  },
+  "patch": {
+    "class_prefix": "generated/de/vw/mib/appui/controlcenter/internal/view/",
+    "day_night_property": 2000000029,
+    "targets": [
+      {
+        "name": "Sc__0",
+        "sha256": "39abf3980eeb4737fbad649ee92787f6b796fc377c6185d38f1d4ef722aac9a3",
+        "kind": "layout",
+        "group": "Sc",
+        "widgets": [
+          {
+            "index": 33,
+            "name": "DropDownDayNightMode",
+            "original_height": 280,
+            "patched_height": 400,
+            "bytecode_offset": 19610
+          },
+          {
+            "index": 34,
+            "name": "Background",
+            "original_height": 280,
+            "patched_height": 400,
+            "bytecode_offset": 19809
+          },
+          {
+            "index": 35,
+            "name": "DDList",
+            "original_height": 280,
+            "patched_height": 400,
+            "bytecode_offset": 20037
+          }
+        ]
+      },
+      {
+        "name": "Sc__1",
+        "sha256": "58574e4378c5bbeffb098cad7142e59db223cc603b5651ef7f648f82d7420e51",
+        "kind": "selection",
+        "group": "Sc",
+        "daynight_reads": 1
+      },
+      {
+        "name": "Sc__3",
+        "sha256": "b62a7f75ff17ca08300c4e481ef149003539e1c08009f013545acd0faa86f625",
+        "kind": "row",
+        "group": "Sc",
+        "daynight_reads": 2,
+        "mode": 0
+      },
+      {
+        "name": "Sc__4",
+        "sha256": "630aea513f1bfad2fc8de2b5f68b8cbd71596ff8399994ca1259026c272b0d07",
+        "kind": "row",
+        "group": "Sc",
+        "daynight_reads": 2,
+        "mode": 1
+      },
+      {
+        "name": "Sc__5",
+        "sha256": "14f0d5e6984303726c5710f7bb3d4abecf7f590b4948e6ffcfacd62f6b7d4349",
+        "kind": "row",
+        "group": "Sc",
+        "daynight_reads": 2,
+        "mode": 2,
+        "visibility": {
+          "bytecode_offset": 7169,
+          "before": 3,
+          "after": 4
+        }
+      },
+      {
+        "name": "Scm__0",
+        "sha256": "08aca22763be53c8dcff6e942b272142b7cad53b7f25587906979d6f719ba30c",
+        "kind": "layout",
+        "group": "Scm",
+        "widgets": [
+          {
+            "index": 38,
+            "name": "DropDownDayNightMode",
+            "original_height": 280,
+            "patched_height": 400,
+            "bytecode_offset": 20820
+          },
+          {
+            "index": 39,
+            "name": "Background",
+            "original_height": 280,
+            "patched_height": 400,
+            "bytecode_offset": 21019
+          },
+          {
+            "index": 40,
+            "name": "DDList",
+            "original_height": 237,
+            "patched_height": 357,
+            "bytecode_offset": 21247
+          }
+        ]
+      },
+      {
+        "name": "Scm__1",
+        "sha256": "00f05e8a312cf02d0a47a03d76f31ee2ce7ba543e55d88395a82c9d1078a2991",
+        "kind": "selection",
+        "group": "Scm",
+        "daynight_reads": 1
+      },
+      {
+        "name": "Scm__7",
+        "sha256": "20f6c8e95c4bec7f60d67fad3e0612e7e51f67f8842b1cf2a6f6afe3fd6a1e07",
+        "kind": "row",
+        "group": "Scm",
+        "daynight_reads": 2,
+        "mode": 0
+      },
+      {
+        "name": "Scm__8",
+        "sha256": "bef3733197654c59ea46c727e81fd42257303988071ff7d5049c21f8816d4517",
+        "kind": "row",
+        "group": "Scm",
+        "daynight_reads": 2,
+        "mode": 1
+      },
+      {
+        "name": "Scm__9",
+        "sha256": "b21c88d6e664a027e2a2581f47aa4360a401ea564c2873324f6e0825fc876722",
+        "kind": "row",
+        "group": "Scm",
+        "daynight_reads": 2,
+        "mode": 2,
+        "visibility": {
+          "bytecode_offset": 7212,
+          "before": 3,
+          "after": 4
+        }
+      }
+    ]
   }
 }
