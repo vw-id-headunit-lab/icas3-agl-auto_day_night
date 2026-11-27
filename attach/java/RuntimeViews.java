@@ -52,7 +52,7 @@ public final class RuntimeViews {
                 if (original < 0) continue;
                 if (!matched.add(widget.get_name())) throw new IllegalStateException("Duplicate dropdown widget");
                 int current = widget.get_height();
-                if (current != original && current != GeometryRules.patchedHeight(name, i, widget.get_name()))
+                if (current != 0 && current != original && current != GeometryRules.patchedHeight(name, i, widget.get_name()))
                     throw new IllegalStateException("Unexpected geometry: " + widget.get_name() + "=" + current);
             }
             if (matched.size() != GeometryRules.widgetCount(name)) throw new IllegalStateException("Incomplete pinned dropdown: " + matched);
@@ -60,16 +60,25 @@ public final class RuntimeViews {
     }
 
     private static void resize(AbstractNodeController node, boolean apply) {
+        String name = node.getClass().getSimpleName();
         CloneData master = node.getCloneMaster();
         for (int i = 0; i < master.widgetCount(); i++) {
             WidgetModel widget = master.widget(i);
-            int original = GeometryRules.originalHeight(node.getClass().getSimpleName(), i, widget.get_name());
+            int original = GeometryRules.originalHeight(name, i, widget.get_name());
             if (original < 0) continue;
+            int current = widget.get_height();
+            int patched = GeometryRules.patchedHeight(name, i, widget.get_name());
             if (apply) {
-                if (!heights.containsKey(widget)) heights.put(widget, widget.get_height());
-                widget.set_height(GeometryRules.patchedHeight(node.getClass().getSimpleName(), i, widget.get_name()));
+                // An unopened menu can contain zero-height placeholders. The patched view
+                // definitions will size them when the factory layout initializes them.
+                if (current == 0) continue;
+                if (!heights.containsKey(widget)) heights.put(widget, current);
+                if (current == patched) continue;
+                widget.set_height(patched);
             } else {
-                widget.set_height(heights.containsKey(widget) ? heights.remove(widget) : original);
+                Integer previous = heights.remove(widget);
+                if (current != patched) continue;
+                widget.set_height(previous == null ? original : previous);
             }
             widget.repaint();
         }
