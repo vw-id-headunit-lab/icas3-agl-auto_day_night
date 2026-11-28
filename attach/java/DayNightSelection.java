@@ -59,8 +59,7 @@ public final class DayNightSelection implements OutEventListener,Runnable {
  /** Never waits or touches the synchronous persistence service on a rendering thread. */
  public static int read(LocalDataSet local,int property){
   int fallback=local.getLocalHmiInt(property);
-  if(property!=PROPERTY)return fallback;
-  fetch();return saved>=0?saved:fallback;
+  return property==PROPERTY&&saved>=0?saved:fallback;
  }
  private static void deliver(final long expectedEpoch,final long request,final int value){
   trace("read result="+value+" request="+request);

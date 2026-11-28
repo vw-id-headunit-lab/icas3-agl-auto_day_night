@@ -9,13 +9,11 @@ import subprocess
 import tempfile
 import zipfile
 
-from patch_config import load_inputs, render_geometry_rules, fixed_edits, sha
+from patch_config import load_inputs, render_geometry_rules, sha
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT_SOURCES = ('DayNightAgent.java', 'PatchSession.java', 'UiExecutor.java', 'AgentRequest.java')
 HELPER_SOURCES = ('DayNightSelection.java', 'RuntimeViews.java', 'ViewNodes.java')
-ASM_EXPORTS = ('--add-exports', 'java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED',
-               '--add-exports', 'java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED')
 
 
 def write_jar(path, entries, manifest=None):
@@ -29,11 +27,9 @@ def write_jar(path, entries, manifest=None):
             output.writestr(info, content)
 
 
-def compile_java(java, destination, sources, classpath=None, exports=()):
+def compile_java(java, destination, sources, classpath=None):
     destination.mkdir()
-    command = [str(java/'javac'), *exports, '-d', str(destination)]
-    if not exports:
-        command += ['--release', '8', '-Xlint:-options']
+    command = [str(java/'javac'), '--release', '8', '-Xlint:-options', '-d', str(destination)]
     if classpath:
         command += ['-cp', classpath]
     subprocess.run(command + [str(source) for source in sources], check=True)
@@ -48,45 +44,25 @@ def class_entries(directory):
     return entries
 
 
-def build_definitions(metadata, view, java, work):
-    """Patch only selected class files; never write a full replacement viewhandler JAR."""
-    spec = metadata['patch']
+def build_pins(spec, view):
+    pins = []
     prefix = spec['class_prefix']
-    output = work/'definitions'
-    output.mkdir()
-    transformer = work/'transformer'
-    compile_java(java, transformer, [ROOT/'attach/tools/PatchViews.java'], exports=ASM_EXPORTS)
-    arguments = []
-    entries, pins = {}, []
     with zipfile.ZipFile(view) as original:
         if len(original.namelist()) != len(set(original.namelist())):
             raise ValueError('Duplicate original ZIP entries')
         for target in spec['targets']:
             name = prefix+target['name']+'.class'
-            data = fixed_edits(original.read(name), target)
-            pins.append(name.replace('/', '.').removesuffix('.class')+'='+target['sha256'])
-            path = output/(target['name']+'.class')
-            path.write_bytes(data)
-            if target['kind'] == 'layout':
-                entries['patched/'+name] = data
-            else:
-                arguments += [str(path), str(path), str(target['daynight_reads']),
-                              str(target.get('mode', -1)), str(spec['day_night_property']), prefix]
-    subprocess.run([str(java/'java'), *ASM_EXPORTS, '-cp', str(transformer), 'PatchViews', *arguments], check=True)
-    for target in spec['targets']:
-        name = prefix+target['name']+'.class'
-        data = (output/(target['name']+'.class')).read_bytes()
-        if data[:4] != b'\xca\xfe\xba\xbe' or int.from_bytes(data[6:8], 'big') != 52:
-            raise ValueError('Patched definition is not Java 8: '+name)
-        entries['patched/'+name] = data
-    entries['pins.properties'] = ('\n'.join(pins)+'\n').encode()
-    return entries
+            digest = sha(original.read(name))
+            if digest != target['sha256']:
+                raise ValueError('Unknown target class: '+name)
+            pins.append(name.replace('/', '.').removesuffix('.class')+'='+digest)
+    return ('\n'.join(pins)+'\n').encode()
 
 
 def build_jars(metadata, paths, jdk, work):
     java = jdk.resolve()/'bin'
     spec = metadata['patch']
-    definitions = build_definitions(metadata, paths['view_jar'], java, work)
+    pins = build_pins(spec, paths['view_jar'])
     geometry = work/'GeometryRules.java'
     geometry.write_text(render_geometry_rules(spec))
     helper_classes = work/'helpers'
@@ -99,7 +75,8 @@ def build_jars(metadata, paths, jdk, work):
     for name in AGENT_SOURCES + HELPER_SOURCES:
         identity.update((ROOT/'attach/java'/name).read_bytes())
     identity.update(json.dumps(metadata, sort_keys=True).encode())
-    for name, data in sorted({**definitions, **helper}.items()):
+    identity.update(pins)
+    for name, data in sorted(helper.items()):
         identity.update(name.encode()); identity.update(data)
     package = 'lab.daynight.attach.v'+identity.hexdigest()[:12]
     generated = work/'agent-sources'
@@ -113,7 +90,7 @@ def build_jars(metadata, paths, jdk, work):
     agent_classes = work/'agent'
     compile_java(java, agent_classes, sources)
     agent = class_entries(agent_classes)
-    agent.update(definitions)
+    agent['pins.properties'] = pins
     agent['bundle.properties'] = ('helpers.sha256='+sha((work/'daynight-helpers.jar').read_bytes())+'\n').encode()
     agent['firmware.properties'] = (
         'view.sha256='+metadata['files']['view_jar']['sha256']+'\n'
@@ -121,8 +98,7 @@ def build_jars(metadata, paths, jdk, work):
         'helper.prefix='+spec['class_prefix'].replace('/', '.')+'\n'
         'target.count='+str(len(spec['targets']))+'\n').encode()
     write_jar(work/'daynight-agent.jar', agent,
-              'Manifest-Version: 1.0\r\nAgent-Class: '+package+'.DayNightAgent\r\n'
-              'Can-Redefine-Classes: true\r\nCan-Retransform-Classes: true\r\n\r\n')
+              'Manifest-Version: 1.0\r\nAgent-Class: '+package+'.DayNightAgent\r\n\r\n')
 
 
 def publish(work, output, version=None):

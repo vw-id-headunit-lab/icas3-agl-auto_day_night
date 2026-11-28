@@ -12,7 +12,7 @@ final class ViewNodes {
     private final IdentityHashMap<Object, Boolean> seen = new IdentityHashMap<Object, Boolean>();
     private final List<AbstractNodeController> nodes = new ArrayList<AbstractNodeController>();
 
-    static List<AbstractNodeController> collect(Object desktop) throws Exception {
+    static List<AbstractNodeController> collect(Object desktop, boolean requireMenu) throws Exception {
         ViewNodes tree = new ViewNodes();
         tree.walk(desktop, 0);
         for (String[] layout : GeometryRules.layouts()) {
@@ -25,7 +25,7 @@ final class ViewNodes {
             if (!found.isEmpty() && !found.equals(expected))
                 throw new IllegalStateException("Incomplete control-center layout: " + found);
         }
-        if (tree.nodes.isEmpty()) throw new IllegalStateException("Open the original control center and retry");
+        if (requireMenu && tree.nodes.isEmpty()) throw new IllegalStateException("Open the original control center and retry");
         return tree.nodes;
     }
 

@@ -69,25 +69,21 @@ class VersionRulesTests(unittest.TestCase):
 
 
 @unittest.skipUnless(JDK and (Path(JDK)/'bin/javac').is_file(), 'Set DAYNIGHT_TEST_JDK')
-class DirectDefinitionsTests(unittest.TestCase):
-    def test_only_pinned_definitions_are_built_without_candidate_jar(self):
+class RuntimeAgentBuildTests(unittest.TestCase):
+    def test_agent_does_not_request_jvm_class_modification(self):
         spec = importlib.util.spec_from_file_location('direct_attach_build', ROOT/'attach/build.py')
         builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
-        for version in ('2995','3001'):
+        for version in ('2995', '3001'):
             with self.subTest(version=version):
                 metadata, paths = load_inputs(version, ROOT)
                 before = sha(paths['view_jar'].read_bytes())
                 with tempfile.TemporaryDirectory() as tmp:
                     work = Path(tmp)
-                    entries = builder.build_definitions(metadata, paths['view_jar'], Path(JDK)/'bin', work)
-                    expected = {'patched/'+metadata['patch']['class_prefix']+target['name']+'.class'
-                                for target in metadata['patch']['targets']}
-                    self.assertEqual(set(entries), expected | {'pins.properties'})
-                    self.assertFalse(list(work.rglob('*.jar')))
-                    with zipfile.ZipFile(paths['view_jar']) as original:
-                        for entry in expected:
-                            content = entries[entry]
-                            self.assertEqual(content[:4], b'\xca\xfe\xba\xbe')
-                            self.assertEqual(int.from_bytes(content[6:8], 'big'), 52)
-                            self.assertNotEqual(content, original.read(entry.removeprefix('patched/')))
+                    builder.build_jars(metadata, paths, Path(JDK), work)
+                    with zipfile.ZipFile(work/'daynight-agent.jar') as agent:
+                        manifest = agent.read('META-INF/MANIFEST.MF')
+                        self.assertNotIn(b'Can-Redefine-Classes', manifest)
+                        self.assertNotIn(b'Can-Retransform-Classes', manifest)
+                        self.assertFalse(any(name.startswith('patched/') for name in agent.namelist()))
+                        self.assertEqual(len(agent.read('pins.properties').splitlines()), len(metadata['patch']['targets']))
                 self.assertEqual(sha(paths['view_jar'].read_bytes()), before)

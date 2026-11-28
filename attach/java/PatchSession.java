@@ -5,10 +5,8 @@ final class PatchSession {
     enum State { ORIGINAL, INSTALLING, INSTALLED, RESTORING, RECOVERY_REQUIRED }
 
     interface Changes {
-        void applyDefinitions() throws Exception;
-        void applyViews() throws Exception;
-        void restoreDefinitions() throws Exception;
-        void restoreViews() throws Exception;
+        void apply() throws Exception;
+        void restore() throws Exception;
     }
 
     private volatile State state = State.ORIGINAL;
@@ -27,8 +25,7 @@ final class PatchSession {
         if (installed()) return;
         state = State.INSTALLING;
         try {
-            changes.applyDefinitions();
-            changes.applyViews();
+            changes.apply();
             state = State.INSTALLED;
         } catch (Throwable failure) {
             try { restore(changes); }
@@ -45,8 +42,7 @@ final class PatchSession {
     private void restore(Changes changes) throws Exception {
         state = State.RESTORING;
         try {
-            changes.restoreDefinitions();
-            changes.restoreViews();
+            changes.restore();
             state = State.ORIGINAL;
         } catch (Throwable failure) {
             state = State.RECOVERY_REQUIRED;

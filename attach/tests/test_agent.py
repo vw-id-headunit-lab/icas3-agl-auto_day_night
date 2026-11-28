@@ -30,7 +30,7 @@ class AgentLifecycleTests(unittest.TestCase):
         (cls.root/'agents').mkdir()
         cls.jar = cls.root/'agents/agent.jar'
         with zipfile.ZipFile(cls.jar,'w') as jar:
-            jar.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\r\nAgent-Class: lab.daynight.attach.DayNightAgent\r\nCan-Redefine-Classes: true\r\nCan-Retransform-Classes: true\r\n\r\n')
+            jar.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\r\nAgent-Class: lab.daynight.attach.DayNightAgent\r\n\r\n')
             for file in (cls.root/'lab').rglob('*.class'):
                 jar.write(file,file.relative_to(cls.root).as_posix())
             jar.writestr('pins.properties',''.join('fixture.View%d=%s\n'%(i,'0'*64) for i in range(10)))

@@ -18,6 +18,8 @@ chmod +x ./daynight-patch
 `bench.platform.BenchPlatform`。没有匹配进程或匹配多个时拒绝；多个实例可用 `--pid 1234` 选择。
 原控制中心应已初始化。补丁保持原 JAR 不变，结果包含 JVM PID／启动时间和安装状态。
 
+Agent 附加后在原厂 UI 线程更新日夜菜单控件，并通过各视图的数据接口显示保存的日夜模式。重新创建的菜单由 UI 定时器接管。移除时恢复原数据接口、控件尺寸和可见状态，并撤销点击监听器。此路径无需 JVM 类重定义或重转换。
+
 重启 HMI 后补丁消失，需要再执行一次；没有添加自启服务或自动 Attach。
 `RECOVERY_REQUIRED` 时应先成功 remove，不能重复 install 掩盖恢复失败。
 
@@ -43,7 +45,7 @@ chmod +x ./daynight-patch
 
 需要 Python 3.11+、Go 1.23+、JDK 17+ ，构建输入位于 `source/<版本>/`。
 源码位于 `attach/`，版本输入与所有修改规则位于 `source/<版本>/inputs.json`。
-唯一构建入口直接生成 class 定义，菜单只编译一次；构建完成输出补丁和摘要文件：
+构建器校验原厂视图 class 的摘要，输出内嵌 Agent 和辅助类的单文件补丁及摘要：
 
 ```sh
 python3 attach/build.py \
@@ -75,7 +77,6 @@ DAYNIGHT_TEST_JDK=/path/to/jdk17 python3 -m unittest discover -s attach/tests -v
 覆盖进程唯一识别、Attach 协议、临时文件复用／清理、结果验证、事务回退、
 过期回调、控件范围、宿主 JVM Attach 和构建边界。虚拟机验证使用原厂 ARM64 JVM。
 
-实车 Attach、真实灯光硬件和长期稳定性尚未验证；原厂权限限制可能使 Attach 失败。
-实现不会自动放宽权限、修改原固件或重启车机。详细 review 见 [代码 review](../docs/CODE_REVIEW.md)。
+S2995 实车已验证附加、移除和再次附加。真实灯光联动、长期稳定性及跨重启保存待测。详细记录见 [Attach 验证](../docs/ATTACH_VALIDATION.md)。
 
 实验版本 3001 使用 `--version 3001`。三个原厂 JAR 均由用户提供，其中 `osgi.jar` 与 2995 逐字节相同，仅用于编译接口。完整 3001 系统和实车未验证；见 [3001 验证](../docs/3001_VALIDATION.md)。

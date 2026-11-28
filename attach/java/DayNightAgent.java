@@ -5,17 +5,14 @@ import java.lang.instrument.*;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.jar.*;
 
-/** Java 8 agent: memory-only, pinned view definitions, explicit removal. */
+/** Java 8 agent: update pinned menu instances without redefining JVM classes. */
 public final class DayNightAgent {
     private static String helperPrefix;
-    private static final Map<Class<?>, byte[]> originals = new LinkedHashMap<Class<?>, byte[]>();
     private static Instrumentation instrumentation;
     private static ClassLoader viewLoader;
     private static Class<?> runtimeViews;
@@ -30,6 +27,7 @@ public final class DayNightAgent {
             try {
                 if ("install".equals(request.action)) install();
                 else if ("remove".equals(request.action)) remove();
+                else if (session.installed()) onUI(() -> runtimeViews.getMethod("checkMonitor").invoke(null));
             } catch (Throwable error) { failure = error; }
             try { request.write(resultJson(failure == null, request.action, failure)); }
             catch (Exception reportError) {
@@ -45,8 +43,6 @@ public final class DayNightAgent {
     private static void install() throws Exception {
         session.requireInstallable();
         if (session.installed()) return;
-        if (!instrumentation.isRedefineClassesSupported() || !instrumentation.isRetransformClassesSupported())
-            throw new UnsupportedOperationException("VM must support redefine and retransform");
         final Properties pins = new Properties();
         try (InputStream in = resource("pins.properties")) { pins.load(in); }
         List<String> names = new ArrayList<String>(pins.stringPropertyNames());
@@ -71,67 +67,27 @@ public final class DayNightAgent {
         verifyFile(viewSource, firmware.getProperty("view.sha256"));
         Class<?> hmi = Class.forName("de.vw.mib.MIBMain", false, viewLoader);
         verifyFile(classLocation(hmi), firmware.getProperty("hmi.sha256"));
-        final List<Class<?>> targets = new ArrayList<Class<?>>();
         for (String name : names) {
             Class<?> type = Class.forName(name, false, viewLoader);
-            if (!instrumentation.isModifiableClass(type)) throw new IllegalStateException("Unmodifiable: " + name);
             byte[] disk = read(type.getResourceAsStream("/" + name.replace('.', '/') + ".class"));
             if (!sha(disk).equals(pins.getProperty(name))) throw new SecurityException("Unknown target class: " + name);
-            targets.add(type);
         }
-        // Capture the actual live definitions for exact in-process removal.
-        final Map<Class<?>, byte[]> captured = new LinkedHashMap<Class<?>, byte[]>();
-        ClassFileTransformer capture = new ClassFileTransformer() {
-            public byte[] transform(ClassLoader loader, String name, Class<?> type, ProtectionDomain pd, byte[] bytes) {
-                if (targets.contains(type)) captured.put(type, bytes.clone());
-                return null;
-            }
-        };
-        instrumentation.addTransformer(capture, true);
-        try { instrumentation.retransformClasses(targets.toArray(new Class<?>[0])); }
-        finally { instrumentation.removeTransformer(capture); }
-        if (captured.size() != targets.size()) throw new IllegalStateException("Could not capture every live target");
         loadHelpers();
-        List<ClassDefinition> definitions = new ArrayList<ClassDefinition>();
-        for (Class<?> type : targets)
-            definitions.add(new ClassDefinition(type, read(resource("patched/" + type.getName().replace('.', '/') + ".class"))));
-        originals.clear(); originals.putAll(captured);
-        try {
-            onUI(new UiExecutor.Work() {
-                public void run() throws Exception {
-                    runtimeViews.getMethod("validate").invoke(null);
-                    session.install(changes(definitions));
-                }
-            });
-            System.out.println("DAYNIGHT_ATTACH installed classes=" + targets.size() + " liveNodes=" + lastRefreshCount);
-        } finally { if (session.original()) originals.clear(); }
+        onUI(() -> session.install(changes()));
+        System.out.println("DAYNIGHT_ATTACH installed liveNodes=" + lastRefreshCount);
     }
 
-    private static PatchSession.Changes changes(final List<ClassDefinition> definitions) {
+    private static PatchSession.Changes changes() {
         return new PatchSession.Changes() {
-            public void applyDefinitions() throws Exception {
-                instrumentation.redefineClasses(definitions.toArray(new ClassDefinition[0]));
-            }
-            public void applyViews() throws Exception { lastRefreshCount = refresh(true); }
-            public void restoreDefinitions() throws Exception { DayNightAgent.restoreDefinitions(); }
-            public void restoreViews() throws Exception { lastRefreshCount = refresh(false); }
+            public void apply() throws Exception { lastRefreshCount = refresh(true); }
+            public void restore() throws Exception { lastRefreshCount = refresh(false); }
         };
     }
 
     private static void remove() throws Exception {
         if (session.original()) return;
-        onUI(new UiExecutor.Work() {
-            public void run() throws Exception { session.remove(changes(Collections.<ClassDefinition>emptyList())); }
-        });
-        originals.clear();
-        System.out.println("DAYNIGHT_ATTACH removed; original live definitions restored");
-    }
-
-    private static void restoreDefinitions() throws Exception {
-        List<ClassDefinition> definitions = new ArrayList<ClassDefinition>();
-        for (Map.Entry<Class<?>, byte[]> entry : originals.entrySet())
-            definitions.add(new ClassDefinition(entry.getKey(), entry.getValue()));
-        instrumentation.redefineClasses(definitions.toArray(new ClassDefinition[0]));
+        onUI(() -> session.remove(changes()));
+        System.out.println("DAYNIGHT_ATTACH removed; original menu state restored");
     }
 
     private static void loadHelpers() throws Exception {

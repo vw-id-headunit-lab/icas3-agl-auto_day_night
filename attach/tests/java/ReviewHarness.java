@@ -12,13 +12,15 @@ public final class ReviewHarness {
     static final class Changes implements PatchSession.Changes {
         int apply, restore;
         boolean failApply, failRestore, errorApply;
-        public void applyDefinitions() { apply++; }
-        public void applyViews() throws Exception {
+        public void apply() throws Exception {
+            apply++;
             if (errorApply) throw new LinkageError("view link failed");
             if (failApply) throw new IOException("view refresh failed");
         }
-        public void restoreDefinitions() { restore++; }
-        public void restoreViews() throws Exception { if (failRestore) throw new IOException("restore failed"); }
+        public void restore() throws Exception {
+            restore++;
+            if (failRestore) throw new IOException("restore failed");
+        }
     }
 
     static void rollbackFailure() throws Exception {

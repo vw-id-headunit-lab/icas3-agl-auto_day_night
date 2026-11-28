@@ -41,7 +41,7 @@ class ReviewRegressionTests(unittest.TestCase):
     def test_failed_recovery_blocks_install_until_successful_remove(self):
         self.run_case('rollback')
 
-    def test_linkage_error_restores_original_definitions(self):
+    def test_linkage_error_runs_rollback(self):
         self.run_case('linkage')
 
     def test_expired_queue_never_applies_later(self):

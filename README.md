@@ -64,7 +64,7 @@ chmod +x ./daynight-patch
 
 ### 支持环境与构建输入
 
-需要 AGL root、Java 8 HotSpot Attach、类重定义和类重转换能力。执行用户应为 JVM 所属用户或 root，控制中心应已初始化。
+需要 AGL root 和 Java 8 HotSpot Attach。执行用户应为 JVM 所属用户或 root，控制中心应已初始化。
 
 构建需要 Python 3.11+、Go 1.23+、JDK 17+。输入按版本放在 `source/`，仅用于开发机和 CI 编译：
 
@@ -80,7 +80,7 @@ chmod +x ./daynight-patch
 
 ### 从源码构建（开发机）
 
-从仓库根目录执行，输出目录必须不存在。唯一构建链直接生成内存 class 补丁，菜单适配器只编译一次：
+在仓库根目录运行构建命令。输出目录应为新目录。构建器校验目标视图摘要并编译 Attach Agent 和菜单适配器。
 
 ```sh
 python3 attach/build.py \
@@ -110,17 +110,9 @@ python3 attach/build.py \
 
 ### 验证状态
 
-2026-11-24，在 QEMU AGL / 原厂 Zulu 8.48.51.251 ARM64 JVM 中验证：
+2026-11-28 在 S2995 / HCN1.1.134 实车的原厂 Zulu 8 ARM64 JVM 验证了运行时附加、移除恢复和再次附加。再次附加后观察超过一个 60 秒 watchdog 周期，HMI PID、启动时间和原厂 `viewhandler.jar` 摘要一致。
 
-- 已运行的菜单从两行动态变为三行，AUTO 选中及菜单重开正常。
-- 模拟日夜信号可切换实际主题，AUTO 保存值保持不变。
-- AUTO 可切回相同外观的手动日间或夜间模式。
-- 卸载恢复、再次加载和重复加载正常，JVM PID 与启动时间保持不变。
-- 原 `viewhandler.jar` SHA-256 保持不变。
-- 28 项自动化测试通过，Go race 检查、vet 和 Linux ARM64 构建通过。
-
-实车 Attach、真实灯光硬件、长期稳定性和跨重启保存尚未验证。虚拟机结果不代表实车验收。
-3001 的静态差异和混合虚拟机验证见 [3001 验证](docs/3001_VALIDATION.md)。修复记录见 [代码 review 与重构](docs/CODE_REVIEW.md)。
+QEMU 台架验证了三行菜单、AUTO 保持选中和切回手动日间。真实灯光联动、长期稳定性和跨重启保存待测。3001 的验证范围见 [3001 验证](docs/3001_VALIDATION.md)。运行时修复的记录见 [Attach 验证](docs/ATTACH_VALIDATION.md)。
 
 ### 源码结构
 
@@ -197,7 +189,7 @@ See the [Attach guide](attach/README.md) for details.
 
 ### Supported environment and build inputs
 
-Requires AGL root, Java 8 HotSpot Attach, class redefinition and retransformation. Run as the JVM owner or root, after the control center has initialized.
+Requires AGL root and Java 8 HotSpot Attach. Run as the JVM owner or root after the control center has initialized.
 
 Building requires Python 3.11+, Go 1.23+ and JDK 17+. Inputs are versioned under `source/` and used only by the development machine and CI:
 
@@ -213,7 +205,7 @@ Mismatched firmware and existing helpers from another patch build are rejected. 
 
 ### Build from source (development machine)
 
-Run from the repository root. The output directory must not already exist. One build pipeline generates in-memory class definitions directly and compiles the menu adapter once:
+Run from the repository root and choose a new output directory. The builder checks the target view digests and compiles the Attach agent and menu adapter.
 
 ```sh
 python3 attach/build.py \
@@ -243,17 +235,9 @@ Versioned inputs live under `source/<version>/`. Implement compatibility before 
 
 ### Verification
 
-Verified on 2026-11-24 in QEMU AGL with the factory Zulu 8.48.51.251 ARM64 JVM:
+On 2026-11-28, Attach, removal and reattachment passed on an S2995 / HCN1.1.134 head unit running the factory Zulu 8 ARM64 JVM. The JVM PID, start time and factory `viewhandler.jar` digest were identical after reattachment and more than one 60-second watchdog interval.
 
-- A running two-row menu becomes three rows; Auto selection and menu reopening work.
-- Simulated day/night signals change the effective theme while preserving the saved Auto mode.
-- Auto can switch to manual Day or Night even when the effective theme already matches.
-- Removal, reinstallation and repeated installation work with unchanged JVM PID and start time.
-- The original `viewhandler.jar` SHA-256 remains unchanged.
-- All 28 automated tests pass, along with Go race checks, vet and Linux ARM64 builds.
-
-Real-vehicle Attach, physical lighting hardware, long-term stability and persistence across reboots have not been verified. VM results do not establish vehicle validation.
-See [3001 validation](docs/3001_VALIDATION.md) for static differences and hybrid-VM scope, and the [code review record](docs/CODE_REVIEW.md) for fixes.
+QEMU testing verified all three menu rows, persistent Auto selection while reopening the menu, and switching back to manual Day. Physical lighting behavior, long-term stability and persistence across reboots still need testing. See the [3001 validation scope](docs/3001_VALIDATION.md) and the [Attach validation record](docs/ATTACH_VALIDATION.md).
 
 ### Source layout
 
